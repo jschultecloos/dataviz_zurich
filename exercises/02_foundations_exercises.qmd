@@ -1,0 +1,814 @@
+---
+title: "Foundations of GG"
+subtitle: "Worksheet based on 'Telling Stories with Data'"
+output:
+  bookdown::html_document2:
+    theme: flatly
+    highlight: textmate
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+    number_sections: yes
+    code_folding: hide
+    toc_depth: 2 
+bibliography: "../literature.bib"
+link-citations: true
+editor: source
+---
+
+
+```{r setup}
+#| message: false
+#| warning: false
+
+pacman::p_load(tidyverse, 
+               carData,  # for the beps dataset  
+               janitor,  # tidy data easily
+               WDI,      # WDI data  
+               patchwork # assemble graphs
+               )
+```
+
+# Telling Stories with Data by Rohan Alexander
+
+This worksheet is largely based on the chapter ["Static Communication"](https://tellingstorieswithdata.com/05-static_communication.html) by the excellent book "Telling Stories with Data. With Applications in R" written by Rohan Alexander (2023).
+
+
+### Bar charts
+
+We typically use a bar chart when we have a categorical variable that we want to focus on.
+
+The geometric object---a "geom"---that we primarily use is `geom_bar()`, but there are many variants to cater for specific situations. To illustrate the use of bar charts, we use a dataset from the 1997-2001 British Election Panel Study that was put together by @Fox.2006 and made available with `BEPS`, after installing and loading `carData`.
+
+
+```{r}
+beps <- 
+  BEPS |> 
+  as_tibble() |> 
+  clean_names() |> 
+  select(age, vote, gender, political_knowledge)
+```
+
+The dataset consists of which party the respondent supports, along with various demographic, economic, and political variables. In particular, we have the age of the respondent. We begin by creating age-groups from the ages, and making a bar chart showing the frequency of each age-group using `geom_bar()` (@fig-bepfitst-1).
+
+```{r}
+beps <-
+  beps |>
+  mutate(
+    age_group =
+      case_when(
+        age < 35 ~ "<35",
+        age < 50 ~ "35-49",
+        age < 65 ~ "50-64",
+        age < 80 ~ "65-79",
+        age < 100 ~ "80-99"
+      ),
+    age_group = 
+      factor(age_group, levels = c("<35", "35-49", "50-64", "65-79", "80-99"))
+  )
+```
+
+```{r}
+#| label: fig-bepfitst
+#| eval: true
+#| fig-cap: "Distribution of age-groups in the 1997-2001 British Election Panel Study"
+#| echo: true
+#| fig-subcap: ["Using `geom_bar()`", "Using `count()` and `geom_col()`"]
+#| layout-ncol: 2
+
+beps |>
+  ggplot(mapping = aes(x = age_group)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Age group", y = "Number of observations")
+
+beps |> 
+  count(age_group) |> 
+  ggplot(mapping = aes(x = age_group, y = n)) +
+  geom_col() +
+  theme_minimal() +
+  labs(x = "Age group", y = "Number of observations")
+```
+
+The default axis label used by `ggplot2` is the name of the relevant variable, so it is often useful to add more detail. We do this using `labs()` by specifying a variable and a name. In the case of @fig-bepfitst-1 we have specified labels for the x-axis and y-axis.
+
+By default, `geom_bar()` creates a count of the number of times each age-group appears in the dataset. It does this because the default statistical transformation---a "stat"---for `geom_bar()` is "count", which saves us from having to create that statistic ourselves. But if we had already constructed a count (for instance, with `beps |> count(age_group)`), then we could specify a variable for the y-axis and then use `geom_col()` (@fig-bepfitst-2).
+
+We may also like to consider various groupings of the data to get a different insight. For instance, we can use color to look at which party the respondent supports, by age-group (@fig-bepsecond-1).
+
+```{r}
+#| echo: true
+#| eval: true
+#| fig-cap: "Distribution of age-group, and vote preference, in the 1997-2001 British Election Panel Study"
+#| label: fig-bepsecond
+#| fig-subcap: ["Using `geom_bar()`", "Using `geom_bar()` with dodge2"]
+#| layout-ncol: 2
+
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = vote)) +
+  geom_bar() +
+  labs(x = "Age group", y = "Number of observations", fill = "Vote") +
+  theme(legend.position = "bottom")
+
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = vote)) +
+  geom_bar(position = "dodge2") +
+  labs(x = "Age group", y = "Number of observations", fill = "Vote") +
+  theme(legend.position = "bottom")
+```
+
+By default, these different groups are stacked, but they can be placed side by side with `position = "dodge2"` (@fig-bepsecond-2). (Using "dodge2" rather than "dodge" adds a little space between the bars.)
+
+#### Themes
+
+At this point, we may like to address the general look of the graph. There are various themes that are built into `ggplot2`. These include: `theme_bw()`, `theme_classic()`, `theme_dark()`, and `theme_minimal()`. A full list is available in the `ggplot2` [cheat sheet](https://github.com/rstudio/cheatsheets/blob/main/data-visualization.pdf). We can use these themes by adding them as a layer (@fig-bepthemes). We could also install more themes from other packages, including `ggthemes` [@ggthemes], and `hrbrthemes` [@hrbrthemes]. We could even build our own!
+
+```{r}
+#| echo: true
+#| eval: true
+#| fig-cap: "Distribution of age-groups, and vote preference, in the 1997-2001 British Election Panel Study, illustrating different themes and the use of `patchwork`"
+#| label: fig-bepthemes
+#| warning: false
+
+theme_bw <-
+  beps |>
+  ggplot(mapping = aes(x = age_group)) +
+  geom_bar(position = "dodge") +
+  theme_bw()
+
+theme_classic <-
+  beps |>
+  ggplot(mapping = aes(x = age_group)) +
+  geom_bar(position = "dodge") +
+  theme_classic()
+
+theme_dark <-
+  beps |>
+  ggplot(mapping = aes(x = age_group)) +
+  geom_bar(position = "dodge") +
+  theme_dark()
+
+theme_minimal <-
+  beps |>
+  ggplot(mapping = aes(x = age_group)) +
+  geom_bar(position = "dodge") +
+  theme_minimal()
+
+(theme_bw + theme_classic) / (theme_dark + theme_minimal)
+```
+
+In @fig-bepthemes we use `patchwork` to bring together multiple graphs. To do this, after installing and loading the package, we assign the graph to a variable. We then use "+" to signal which should be next to each other, "/" to signal which should be on top, and use brackets to indicate precedence
+
+#### Facets
+
+We use facets to show variation, based on one or more variables [@Wilkinson.2012, p. 219]. Facets are especially useful when we have already used color to highlight variation in some other variable. For instance, we may be interested to explain vote, by age and gender (@fig-facets). We rotate the x-axis with `guides(x = guide_axis(angle = 90))` to avoid overlapping. We also change the position of the legend with `theme(legend.position = "bottom")`.
+
+```{r}
+#| echo: true
+#| eval: true
+#| fig-cap: "Distribution of age-group by gender, and vote preference, in the 1997-2001 British Election Panel Study"
+#| label: fig-facets
+#| warning: false
+
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = gender)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(
+    x = "Age-group of respondent",
+    y = "Number of respondents",
+    fill = "Gender"
+  ) +
+  facet_wrap(vars(vote)) +
+  guides(x = guide_axis(angle = 90)) +
+  theme(legend.position = "bottom")
+```
+
+We could change `facet_wrap()` to wrap vertically instead of horizontally with `dir = "v"`. Alternatively, we could specify a few rows, say `nrow = 2`, or a number of columns, say `ncol = 2`. 
+
+By default, both facets will have the same x-axis and y-axis. We could enable both facets to have different scales with `scales = "free"`, or just the x-axis with `scales = "free_x"`, or just the y-axis with `scales = "free_y"` (@fig-facetsfancy). 
+
+```{r}
+#| echo: true
+#| eval: true
+#| fig-cap: "Distribution of age-group by gender, and vote preference, in the 1997-2001 British Election Panel Study"
+#| label: fig-facetsfancy
+#| warning: false
+
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = gender)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(
+    x = "Age-group of respondent",
+    y = "Number of respondents",
+    fill = "Gender"
+  ) +
+  facet_wrap(vars(vote), scales = "free") +
+  guides(x = guide_axis(angle = 90)) +
+  theme(legend.position = "bottom")
+```
+
+Finally, we can change the labels of the facets using `labeller()` (@fig-facetsfancylabels). 
+
+```{r}
+#| echo: true
+#| eval: true
+#| fig-cap: "Distribution of age-group by political knowledge, and vote preference, in the 1997-2001 British Election Panel Study"
+#| label: fig-facetsfancylabels
+#| warning: false
+
+new_labels <- 
+  c("0" = "No knowledge", "1" = "Low knowledge",
+    "2" = "Moderate knowledge", "3" = "High knowledge")
+
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = vote)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(
+    x = "Age-group of respondent",
+    y = "Number of respondents",
+    fill = "Voted for"
+  ) +
+  facet_wrap(
+    vars(political_knowledge),
+    scales = "free",
+    labeller = labeller(political_knowledge = new_labels)
+  ) +
+  guides(x = guide_axis(angle = 90)) +
+  theme(legend.position = "bottom")
+```
+
+We now have three ways to combine multiple graphs: sub-figures, facets, and `patchwork`. They are useful in different circumstances: 
+
+- sub-figures for when we are considering different variables;
+- facets for when we are considering a categorical variable; 
+- `patchwork` for when we are interested in bringing together entirely different graphs.
+
+#### Colors
+
+We now turn to the colors used in the graph. There are a variety of different ways to change the colors. The many palettes available from `RColorBrewer` [@RColorBrewer] can be specified using `scale_fill_brewer()`. In the case of `viridis` [@viridis] we can specify the palettes using `scale_fill_viridis_d()`. Additionally, `viridis` is particularly focused on color-blind palettes (@fig-usecolor). Neither `RColorBrewer` nor `viridis` need to be explicitly installed or loaded because `ggplot2`, which is part of the `tidyverse`, takes care of that for us.
+
+
+
+```{r}
+#| echo: true
+#| eval: true
+#| message: false
+#| warning: false
+#| fig-cap: "Distribution of age-group and vote preference, in the 1997-2001 British Election Panel Study, illustrating different colors"
+#| label: fig-usecolor
+#| fig-subcap: ["Brewer palette 'Blues'", "Brewer palette 'Set1'", "Viridis palette default", "Viridis palette 'magma'"]
+#| layout-ncol: 2
+
+# Panel (a)
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = vote)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Age-group", y = "Number", fill = "Voted for") +
+  theme(legend.position = "bottom") +
+  scale_fill_brewer(palette = "Blues")
+
+# Panel (b)
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = vote)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Age-group", y = "Number", fill = "Voted for") +
+  theme(legend.position = "bottom") +
+  scale_fill_brewer(palette = "Set1")
+
+# Panel (c)
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = vote)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Age-group", y = "Number", fill = "Voted for") +
+  theme(legend.position = "bottom") +
+  scale_fill_viridis_d()
+
+# Panel (d)
+beps |>
+  ggplot(mapping = aes(x = age_group, fill = vote)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(x = "Age-group", y = "Number", fill = "Voted for") +
+  theme(legend.position = "bottom") +
+  scale_fill_viridis_d(option = "magma")
+```
+
+In addition to using pre-built palettes, we could build our own palette. That said, color is something to be considered with care. It should be used to increase the amount of information that is communicated [@Cleveland.1994]. Color should not be added to graphs unnecessarily---that is to say, it should play some role. Typically, that role is to distinguish different groups, which implies making the colors dissimilar. Color may also be appropriate if there is some relationship between the color and the variable.
+For instance, if making a graph of the price of mangoes and raspberries, then it could help the reader decode the information if the colors were yellow and red, respectively [@Franconeri.2021, p. 121].
+
+
+### Scatterplots
+
+We are often interested in the relationship between two numeric or continuous variables. We can use scatterplots to show this. A scatterplot may not always be the best choice, but it is rarely a bad one [@weissgerber2015beyond]. Some consider it the most versatile and useful graph option [@historyofdataviz, p. 121]. To illustrate scatterplots, we install and load `WDI` and then use that to download some economic indicators from the World Bank. In particular, we use `WDIsearch()` to find the unique key that we need to pass to `WDI()` to facilitate the download.
+
+
+```{r}
+#| echo: true
+#| eval: false
+
+WDIsearch("gdp growth")
+WDIsearch("inflation")
+WDIsearch("population, total")
+WDIsearch("Unemployment, total")
+```
+
+```{r}
+#| echo: true
+#| eval: false
+
+world_bank_data <-
+  WDI(
+    indicator =
+      c("FP.CPI.TOTL.ZG", "NY.GDP.MKTP.KD.ZG", "SP.POP.TOTL","SL.UEM.TOTL.NE.ZS"),
+    country = c("AU", "ET", "IN", "US")
+  )
+```
+
+```{r}
+#| echo: false
+#| eval: false
+
+# INTERNAL
+write_csv(world_bank_data, "./data/world_bank_data.csv")
+```
+
+```{r}
+#| eval: true
+#| warning: false
+#| echo: false
+
+# INTERNAL
+
+world_bank_data <-
+  read_csv(
+    "./data/world_bank_data.csv",
+    show_col_types = FALSE
+  )
+```
+
+We may like to change the variable names to be more meaningful, and only keep those that we need.
+
+```{r}
+#| echo: true
+#| eval: true
+
+world_bank_data <-
+  world_bank_data |>
+  rename(
+    inflation = FP.CPI.TOTL.ZG,
+    gdp_growth = NY.GDP.MKTP.KD.ZG,
+    population = SP.POP.TOTL,
+    unem_rate = SL.UEM.TOTL.NE.ZS
+  ) |>
+  select(country, year, inflation, gdp_growth, population, unem_rate)
+
+head(world_bank_data)
+```
+
+To get started we can use `geom_point()` to make a scatterplot showing GDP growth and inflation, by country (@fig-scattorplot-1).
+
+```{r}
+#| warning: false
+#| label: fig-scattorplot
+#| fig-cap: "Relationship between inflation and GDP growth for Australia, Ethiopia, India, and the United States"
+#| fig-subcap: ["Default settings", "With the addition of a theme and labels", "Including standard errors"]
+#| layout-ncol: 2
+
+# Panel (a)
+world_bank_data |>
+  ggplot(mapping = aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_point()
+
+# Panel (b)
+world_bank_data |>
+  ggplot(mapping = aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "GDP growth", y = "Inflation", color = "Country")
+```
+
+As with bar charts, we can change the theme, and update the labels (@fig-scattorplot-2). 
+
+For scatterplots we use "color" instead of "fill", as we did for bar charts, because they use dots rather than bars. This also then slightly affects how we change the palette (@fig-scatterplotnicercolor). That said, with particular types of dots, for instance `shape = 21`, it is possible to have both `fill` and `color` aesthetics.
+
+```{r}
+#| echo: true
+#| eval: true
+#| message: false
+#| warning: false
+#| label: fig-scatterplotnicercolor
+#| fig-cap: "Relationship between inflation and GDP growth for Australia, Ethiopia, India, and the United States"
+#| fig-subcap: ["Brewer palette 'Blues'", "Brewer palette 'Set1'", "Viridis palette default", "Viridis palette 'magma'"]
+#| layout-ncol: 2
+
+# Panel (a)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "GDP growth", y = "Inflation", color = "Country") +
+  theme(legend.position = "bottom") +
+  scale_color_brewer(palette = "Blues")
+
+# Panel (b)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "GDP growth",  y = "Inflation", color = "Country") +
+  theme(legend.position = "bottom") +
+  scale_color_brewer(palette = "Set1")
+
+# Panel (c)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "GDP growth",  y = "Inflation", color = "Country") +
+  theme(legend.position = "bottom") +
+  scale_colour_viridis_d()
+
+# Panel (d)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "GDP growth",  y = "Inflation", color = "Country") +
+  theme(legend.position = "bottom") +
+  scale_colour_viridis_d(option = "magma")
+```
+
+The points of a scatterplot sometimes overlap. We can address this situation in a variety of ways (@fig-alphajitter): 
+
+1) Adding a degree of transparency to our dots with "alpha" (@fig-alphajitter-1).\index{graphs!alpha} The value for "alpha" can vary between 0, which is fully transparent, and 1, which is completely opaque. 
+2) Adding a small amount of noise, which slightly moves the points, using `geom_jitter()` (@fig-alphajitter-2). By default, the movement is uniform in both directions, but we can specify which direction movement occurs with "width" or "height". The decision between these two options turns on the degree to which accuracy matters, and the number of points: it is often useful to use `geom_jitter()` when you want to highlight the relative density of points and not necessarily the exact value of individual points. When using `geom_jitter()` it is a good idea to set a seed for reproducibility.
+
+```{r}
+#| fig-cap: "Relationship between inflation and GDP growth for Australia, Ethiopia, India, and the United States"
+#| label: fig-alphajitter
+#| warning: false
+#| fig-subcap: ["Changing the alpha setting", "Using jitter"]
+#| layout-ncol: 2
+
+set.seed(853)
+
+# Panel (a)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country )) +
+  geom_point(alpha = 0.5) +
+  theme_minimal() +
+  labs(x = "GDP growth", y = "Inflation", color = "Country")
+
+# Panel (b)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_jitter(width = 1, height = 1) +
+  theme_minimal() +
+  labs(x = "GDP growth", y = "Inflation", color = "Country")
+```
+
+We often use scatterplots to illustrate a relationship between two continuous variables. It can be useful to add a "summary" line using `geom_smooth()` (@fig-scattorplottwo). We can specify the relationship using "method", change the color with "color", and add or remove standard errors with "se". 
+A commonly used "method" is `lm`, which computes and plots a simple linear regression line similar to using the `lm()` function. Using `geom_smooth()` adds a layer to the graph, and so it inherits aesthetics from `ggplot()`. For instance, that is why we have one line for each country in @fig-scattorplottwo-1 and @fig-scattorplottwo-2. We could overwrite that by specifying a particular color (@fig-scattorplottwo-3). There are situation where other types of fitted lines such as splines might be preferred.
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: "Relationship between inflation and GDP growth for Australia, Ethiopia, India, and the United States"
+#| label: fig-scattorplottwo
+#| fig-subcap: ["Default line of best fit", "Specifying a linear relationship", "Specifying only one color"]
+#| layout-ncol: 2
+
+# Panel (a)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_jitter() +
+  geom_smooth() +
+  theme_minimal() +
+  labs(x = "GDP growth", y = "Inflation", color = "Country")
+
+# Panel (b)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_jitter() +
+  geom_smooth(method = lm, se = FALSE) +
+  theme_minimal() +
+  labs(x = "GDP growth", y = "Inflation", color = "Country")
+
+# Panel (c)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, y = inflation, color = country)) +
+  geom_jitter() +
+  geom_smooth(method = lm, color = "black", se = FALSE) +
+  theme_minimal() +
+  labs(x = "GDP growth", y = "Inflation", color = "Country")
+```
+
+
+### Line plots
+
+We can use a line plot when we have variables that should be joined together, for instance, an economic time series. We will continue with the dataset from the World Bank and focus on GDP growth in the United States using `geom_line()` (@fig-lineplot-1). The source of the data can be added to the graph using "caption" within `labs()`.
+
+```{r}
+#| fig-cap: "United States GDP growth (1961-2020)"
+#| label: fig-lineplot
+#| warning: false
+#| layout-ncol: 2
+#| fig-subcap: ["Using a line plot", "Using a stairstep line plot"]
+
+# Panel (a)
+world_bank_data |>
+  filter(country == "United States") |>
+  ggplot(mapping = aes(x = year, y = gdp_growth)) +
+  geom_line() +
+  theme_minimal() +
+  labs(x = "Year", y = "GDP growth", caption = "Data source: World Bank.")
+
+# Panel (b)
+world_bank_data |>
+  filter(country == "United States") |>
+  ggplot(mapping = aes(x = year, y = gdp_growth)) +
+  geom_step() +
+  theme_minimal() +
+  labs(x = "Year",y = "GDP growth", caption = "Data source: World Bank.")
+```
+
+We can use `geom_step()`, a slight variant of `geom_line()`, to focus attention on the change from year to year (@fig-lineplot-2).
+
+The Phillips curve is the name given to plot of the relationship between unemployment and inflation over time. An inverse relationship is sometimes found in the data, for instance in the United Kingdom between 1861 and 1957 [@phillips1958relation]. We have a variety of ways to investigate this relationship in our data, including:
+
+1) Adding a second line to our graph. For instance, we could add inflation (@fig-notphillips-1). This requires us to use `pivot_longer()`, to ensure that the data are in a tidy format.
+2) Using `geom_path()` to link values in the order they appear in the dataset. In @fig-notphillips-2 we show a Phillips curve for the United States between 1960 and 2020. @fig-notphillips-2 does not appear to show any clear relationship between unemployment and inflation.
+
+
+```{r}
+#| fig-cap: "Unemployment and inflation for the United States (1960-2020)"
+#| label: fig-notphillips
+#| layout-ncol: 2
+#| fig-subcap: ["Comparing the two time series over time", "Plotting the two time series against each other"]
+#| warning: false
+
+world_bank_data |>
+  filter(country == "United States") |>
+  select(-population, -gdp_growth) |>
+  pivot_longer(
+    cols = c("inflation", "unem_rate"),
+    names_to = "series",
+    values_to = "value"
+  ) |>
+  ggplot(mapping = aes(x = year, y = value, color = series)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    x = "Year", y = "Value", color = "Economic indicator",
+    caption = "Data source: World Bank."
+  ) +
+  scale_color_brewer(palette = "Set1", labels = c("Inflation", "Unemployment")) +
+  theme(legend.position = "bottom")
+
+world_bank_data |>
+  filter(country == "United States") |>
+  ggplot(mapping = aes(x = unem_rate, y = inflation)) +
+  geom_path() +
+  theme_minimal() +
+  labs(
+    x = "Unemployment rate", y = "Inflation",
+    caption = "Data source: World Bank."
+  )
+```
+
+### Histograms
+
+A histogram is useful to show the shape of the distribution of a continuous variable. The full range of the data values is split into intervals called "bins" and the histogram counts how many observations fall into which bin. In @fig-hisogramone we examine the distribution of GDP in Ethiopia.
+
+```{r}
+#| fig-cap: "Distribution of GDP growth in Ethiopia (1960-2020)"
+#| label: fig-hisogramone
+#| message: false
+#| warning: false
+
+world_bank_data |>
+  filter(country == "Ethiopia") |>
+  ggplot(aes(x = gdp_growth)) +
+  geom_histogram() +
+  theme_minimal() +
+  labs(
+    x = "GDP growth",
+    y = "Number of occurrences",
+    caption = "Data source: World Bank."
+  )
+```
+
+The key component that determines the shape of a histogram is the number of bins. This can be specified in one of two ways (@fig-hisogrambins): 
+
+1) specifying the number of "bins" to include; or 
+2) specifying their "binwidth".
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: "Distribution of GDP growth in Ethiopia (1960-2020)"
+#| label: fig-hisogrambins
+#| fig-subcap: ["Five bins", "20 bins", "Binwidth of two", "Binwidth of five"]
+#| layout-ncol: 2
+
+# Panel (a)
+world_bank_data |>
+  filter(country == "Ethiopia") |>
+  ggplot(aes(x = gdp_growth)) +
+  geom_histogram(bins = 5) +
+  theme_minimal() +
+  labs(
+    x = "GDP growth",
+    y = "Number of occurrences"
+  )
+
+# Panel (b)
+world_bank_data |>
+  filter(country == "Ethiopia") |>
+  ggplot(aes(x = gdp_growth)) +
+  geom_histogram(bins = 20) +
+  theme_minimal() +
+  labs(
+    x = "GDP growth",
+    y = "Number of occurrences"
+  )
+
+# Panel (c)
+world_bank_data |>
+  filter(country == "Ethiopia") |>
+  ggplot(aes(x = gdp_growth)) +
+  geom_histogram(binwidth = 2) +
+  theme_minimal() +
+  labs(
+    x = "GDP growth",
+    y = "Number of occurrences"
+  )
+
+# Panel (d)
+world_bank_data |>
+  filter(country == "Ethiopia") |>
+  ggplot(aes(x = gdp_growth)) +
+  geom_histogram(binwidth = 5) +
+  theme_minimal() +
+  labs(
+    x = "GDP growth",
+    y = "Number of occurrences"
+  )
+```
+
+Histograms can be thought of as locally averaging data, and the number of bins affects how much of this occurs. When there are only two bins then there is a lot of smoothing, but we lose a lot of accuracy. Too few bins results in more bias, while too many bins results in more variance [@wasserman, p. 303]. Our decision as to the number of bins, or their width, is concerned with trying to balance bias and variance. This will depend on a variety of concerns including the subject matter and the goal [@Cleveland.1994, p. 135]. This is one of the reasons that @Denby.2009 consider histograms to be especially valuable as exploratory tools.
+
+Finally, while we can use "fill" to distinguish between different types of observations, it can get quite messy. It is usually better to: 
+
+1. trace the outline of the distribution with `geom_freqpoly()` (@fig-different-obs-1) 
+2. build stack of dots with `geom_dotplot()` (@fig-different-obs-2); or
+3. add transparency, especially if the differences are more stark (@fig-different-obs-3).
+
+```{r}
+#| fig-cap: "Distribution of GDP growth across various countries (1960-2020)"
+#| label: fig-different-obs
+#| message: false
+#| warning: false
+#| layout-ncol: 2
+#| fig-subcap: ["Tracing the outline", "Using dots", "Adding transparency"]
+
+# Panel (a)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, color = country)) +
+  geom_freqpoly() +
+  theme_minimal() +
+  labs(
+    x = "GDP growth", y = "Number of occurrences",
+    color = "Country",
+    caption = "Data source: World Bank."
+  ) +
+  scale_color_brewer(palette = "Set1")
+
+# Panel (b)
+world_bank_data |>
+  ggplot(aes(x = gdp_growth, group = country, fill = country)) +
+  geom_dotplot(method = "histodot") +
+  theme_minimal() +
+  labs(
+    x = "GDP growth", y = "Number of occurrences",
+    fill = "Country",
+    caption = "Data source: World Bank."
+  ) +
+  scale_color_brewer(palette = "Set1")
+
+# Panel (c)
+world_bank_data |>
+  filter(country %in% c("India", "United States")) |>
+  ggplot(mapping = aes(x = gdp_growth, fill = country)) +
+  geom_histogram(alpha = 0.5, position = "identity") +
+  theme_minimal() +
+  labs(
+    x = "GDP growth", y = "Number of occurrences",
+    fill = "Country",
+    caption = "Data source: World Bank."
+  ) +
+  scale_color_brewer(palette = "Set1")
+```
+
+An interesting alternative to a histogram is the empirical cumulative distribution function (ECDF). The choice between this and a histogram is tends to be audience-specific. It may not appropriate for less-sophisticated audiences, but if the audience is quantitatively comfortable, then it can be a great choice because it does less smoothing than a histogram. We can build an ECDF with `stat_ecdf()`. For instance, @fig-ecdfismyfavohidonthavefavs shows an ECDF equivalent to @fig-hisogramone.
+
+```{r}
+#| fig-cap: "Distribution of GDP growth in four countries (1960-2020)"
+#| label: fig-ecdfismyfavohidonthavefavs
+#| warning: false
+
+world_bank_data |>
+  ggplot(mapping = aes(x = gdp_growth, color = country)) +
+  stat_ecdf(geom = "point") +
+  theme_minimal() +
+  labs(
+    x = "GDP growth", y = "Proportion", color = "Country",
+    caption = "Data source: World Bank."
+  ) + 
+  theme(legend.position = "bottom")
+```
+
+
+### Boxplots
+
+A boxplot typically shows five aspects: 1) the median, 2) the 25th, and 3) 75th percentiles. The fourth and fifth elements differ depending on specifics. One option is the minimum and maximum values. Another option is to determine the difference between the 75th and 25th percentiles, which is the interquartile range. The fourth and fifth elements are then $1.5\times\mbox{IQR}$ from the 25th and 75th percentiles. That latter approach is used, by default, in `geom_boxplot` from `ggplot2`. @chartingstatistics [p. 166] introduced the notion of a chart that focused on the range and various summary statistics including the median and the range, while @tukeyeda focused on which summary statistics and popularized it [@anotherhadleyreferencelol].
+
+One reason for using graphs is that they help us understand and embrace how complex our data are, rather than trying to hide and smooth it away [@armstrongembracecomplexity]. One appropriate use case for boxplots is to compare the summary statistics of many variables at once, such as in @Bethlehem2022. But boxplots alone are rarely the best choice because they hide the distribution of data, rather than show it. The same boxplot can apply to very different distributions. To see this, consider some simulated data from the beta distribution of two types. The first contains draws from two beta distributions: one that is right skewed and another that is left skewed. The second contains draws from a beta distribution with no skew, noting that $\mbox{Beta}(1, 1)$ is equivalent to $\mbox{Uniform}(0, 1)$.
+
+```{r}
+set.seed(853)
+
+number_of_draws <- 10000
+
+both_left_and_right_skew <-
+  c(
+    rbeta(number_of_draws / 2, 5, 2),
+    rbeta(number_of_draws / 2, 2, 5)
+  )
+
+no_skew <-
+  rbeta(number_of_draws, 1, 1)
+
+beta_distributions <-
+  tibble(
+    observation = c(both_left_and_right_skew, no_skew),
+    source = c(
+      rep("Left and right skew", number_of_draws),
+      rep("No skew", number_of_draws)
+    )
+  )
+```
+
+We can first compare the boxplots of the two series (@fig-boxplotfirst-1). But if we plot the actual data then we can see how different they are (@fig-boxplotfirst-2).
+
+```{r}
+#| label: fig-boxplotfirst
+#| message: false
+#| warning: false
+#| layout-ncol: 2
+#| fig-cap: "Data drawn from beta distributions with different parameters"
+#| fig-subcap: ["Illustrated with a boxplot","Actual data"]
+
+beta_distributions |>
+  ggplot(aes(x = source, y = observation)) +
+  geom_boxplot() +
+  theme_classic()
+
+beta_distributions |>
+  ggplot(aes(x = observation, color = source)) +
+  geom_freqpoly(binwidth = 0.05) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+```
+
+One way forward, if a boxplot is to be used, is to include the actual data as a layer on top of the boxplot. For instance, in @fig-bloxplotandoverlay we show the distribution of inflation across the four countries. The reason that this works well is that it shows the actual observations, as well as the summary statistics.
+
+```{r}
+#| fig-cap: "Distribution of inflation data for four countries (1960-2020)"
+#| label: fig-bloxplotandoverlay
+#| message: false
+#| warning: false
+
+world_bank_data |>
+  ggplot(mapping = aes(x = country, y = inflation)) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.3, width = 0.15, height = 0) +
+  theme_minimal() +
+  labs(
+    x = "Country",
+    y = "Inflation",
+    caption = "Data source: World Bank."
+  )
+```
+
+
+
+
+
