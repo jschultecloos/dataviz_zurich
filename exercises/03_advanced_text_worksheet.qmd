@@ -1,0 +1,1007 @@
+---
+title: "Annotations and Text"
+subtitle: "Worksheet based on 'Engaging and Beautiful Data Visualizations with ggplot2' by Cedric Scherer"
+format: html
+editor: source
+---
+
+
+# Engaging and Beautiful Data Visualizations with ggplot2
+
+This worksheet is largely based on the session 2 ["Working with Text"](https://posit-conf-2023.github.io/dataviz-ggplot2/modules/s03-text.html#outline) featured in the excellent workshop 'Engaging and Beautiful Data Visualizations with ggplot2' by Cedric Scherer (2023).
+
+```{r setup}
+pacman::p_load(tidyverse, 
+               ggplot2, 
+               here, 
+               scales, 
+               ggtext, 
+               ggrepel, 
+               ggforce, 
+               ggannotate, 
+               concaveman)
+
+if (!"geomtextpath" %in% rownames(installed.packages())) {
+  remotes::install_github("AllanCameron/geomtextpath")
+}
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.height = 3.6,
+  fig.align = "center",
+  collapse = TRUE)
+
+set.seed(1234)
+
+options("digits" = 2, "width" = 150)
+
+```
+
+
+## Load and look at data
+
+First we'll load the London bikes data that we are already familiar with. We also set a global theme for the rest of the document.
+
+```{r load-data, include=FALSE}
+
+bikes <-
+  read_csv("./data/london-bikes.csv",
+    col_types = "Dcfffilllddddc"
+  ) %>% 
+  # generate meaningful labels for the season variable
+  mutate(season = case_when(
+    season == 0 ~ "Spring", 
+    season == 1 ~ "Summer", 
+    season == 2 ~ "Autumn", 
+    season == 3 ~ "Winter"
+  ))
+
+
+theme_set(theme_light(base_size = 14, base_family = "Asap SemiCondensed"))
+
+theme_update(
+  panel.grid.minor = element_blank(),
+  plot.title = element_text(face = "bold"),
+  plot.title.position = "plot"
+)
+
+```
+
+
+A basic plot variant similar to the one we already know from yesterday: 
+
+```{r workhorse-plot}
+
+g <- ggplot(
+    bikes,
+    aes(x = temp, y = count,
+        color = season)
+  ) +
+  geom_point(
+    alpha = .5
+  ) +
+  labs(
+    x = "Temperature (°C)",
+    y = "Reported bike shares",
+    title = "TfL bike sharing trends",
+    subtitle = "Reported bike rents versus air temperature in London",
+    caption = "Data: TfL",
+    color = "Season:",
+    tag = "1."
+  )
+
+g
+
+```
+
+## Basic text styling
+
+Title in bold: 
+
+```{r}
+g + theme(
+  plot.title = element_text(face = "bold"),
+  plot.title.position = "plot"
+)
+
+
+```
+
+Y-axis text in a green-ish color: 
+
+```{r}
+
+g + theme(
+  plot.title = element_text(face = "bold"),
+  plot.title.position = "plot",
+  axis.text = element_text(
+    color = "#28a87d"
+  )
+)
+```
+
+
+Applying a different font and rotating the text lables (good practice?)
+
+```{r}
+g + theme(
+  plot.title = element_text(face = "bold"),
+  plot.title.position = "plot",
+  axis.text = element_text(
+    color = "#28a87d",
+    family = "Spline Sans Mono",
+    face = "italic",
+    lineheight = 1.3, # no effect here
+    angle = 45,
+    hjust = 1,
+    vjust = 0,
+    margin = margin(10, 0, 20, 0)
+  )
+)
+```
+
+Changing the margin around the axis text. Think: "trouble" - trbl (top, right, bottom, left). Or spell out the different positions for clarity.
+
+```{r}
+g + theme(
+  plot.title = element_text(face = "bold"),
+  plot.title.position = "plot",
+  axis.text = element_text(
+    color = "#28a87d",
+    family = "Spline Sans Mono",
+    face = "italic",
+    lineheight = 1.3, # no effect here
+    angle = 45,
+    hjust = 1, # no effect here
+    vjust = 0, # no effect here
+    margin = margin(10, 0, 20, 0) # no effect here
+  ),
+  axis.text.x = element_text(
+    hjust = 1,
+    vjust = 0,
+    margin = margin(10, 0, 20, 0) # trbl
+  )
+)
+```
+
+```{r}
+g + theme(
+  plot.title = element_text(face = "bold"),
+  plot.title.position = "plot",
+  axis.text = element_text(
+    color = "#28a87d",
+    family = "Spline Sans Mono",
+    face = "italic",
+    lineheight = 1.3, # no effect here
+    angle = 45,
+    hjust = 1, # no effect here
+    vjust = 0, # no effect here
+    margin = margin(10, 0, 20, 0) # no effect here
+  ),
+  plot.tag = element_text(
+    margin = margin(0, 12, -8, 0) # trbl
+  )
+)
+
+```
+Turn on "debugging" mode to fix the margins.
+
+```{r}
+
+g + theme(
+  plot.title = element_text(face = "bold"),
+  plot.title.position = "plot",
+  axis.text = element_text(
+    color = "#28a87d",
+    family = "Spline Sans Mono",
+    face = "italic",
+    hjust = 1,
+    vjust = 0,
+    angle = 45,
+    lineheight = 1.3, # no effect here
+    margin = margin(10, 0, 20, 0), # no effect here
+    debug = TRUE
+  ),
+  plot.tag = element_text(
+    margin = margin(0, 12, -8, 0), # trbl
+    debug = TRUE
+  )
+)
+```
+
+
+
+## Scales Styling
+
+
+Remove the tag, title, and subtitle. 
+
+```{r}
+g <- g + labs(tag = NULL, title = NULL, 
+              subtitle = NULL)
+
+g
+```
+Add customised breaks to the y scale.
+
+```{r}
+g +
+  scale_y_continuous(
+    breaks = 0:4*15000
+  )
+
+```
+
+"Pretty" breakes:
+
+```{r}
+g +
+  scale_y_continuous(
+    breaks = scales::breaks_pretty(n = 10)
+  )
+```
+
+Change the comma format of the scales: 
+```{r}
+g +
+  scale_y_continuous(
+    breaks = 0:4*15000,
+    labels = scales::comma_format()
+  )
+
+```
+
+Add a suffix to the scale for clarity.
+```{r}
+g +
+  scale_y_continuous(
+    breaks = 0:4*15000,
+    labels = scales::comma_format(
+      suffix = " bikes"
+    ),
+    name = NULL
+  )
+```
+Name of the scale can be changed easily: 
+```{r}
+g +
+  scale_y_continuous(
+    breaks = 0:4*15000,
+    labels = scales::comma_format(
+      scale = .001
+    ),
+    name = "Reported bike shares in thousands"
+  )
+```
+
+Add a functional call to label the scale. 
+```{r}
+g +
+  scale_y_continuous(
+    breaks = 0:4*15000,
+    labels = function(y) y / 1000,
+    name = "Reported bike shares in thousands"
+  )
+```
+
+ Add the Celsius degree to the scale: 
+ 
+```{r}
+g +
+  scale_x_continuous(
+    labels = function(y) paste0(y, "°C"),
+    name = "Temperature"
+  )
+
+
+```
+
+
+```{r}
+g +
+  scale_color_discrete(
+    name = NULL,
+    labels = str_to_title
+  )
+
+```
+
+## Styling with `ggtext`
+
+Markdown cannot be parsed out-of-the-box.
+```{r}
+g +
+  ggtitle("**TfL bike sharing trends by _season_**")
+
+
+```
+
+`ggtext::element_markdown`: 
+
+```{r}
+g +
+  ggtitle("**TfL bike sharing trends by _season_**") +
+  theme(
+    plot.title = ggtext::element_markdown()
+  )
+
+```
+
+HTML styling for more customisation: 
+```{r}
+g +
+  ggtitle("<b style='font-family:Times;font-size:25pt'>TfL</b> bike sharing trends by <i style='color:#28A87D;'>season</i>") +
+  theme(
+    plot.title = ggtext::element_markdown()
+  )
+
+```
+
+Add some `geom_richtext` to the plot: s
+```{r}
+g +
+  ggtext::geom_richtext(
+    aes(x = 18, y = 48500,
+        label = "What happened on these<br>two <b style='color:#F7B01B;'>summer days</b>?"),
+    stat = "unique"
+  ) +
+  scale_color_manual(
+    values = c("#6681FE", "#1EC98D", "#F7B01B", "#A26E7C")
+  )
+
+```
+Transparency to make sure the points remain visible. 
+
+```{r}
+g +
+  ggtext::geom_richtext(
+    aes(x = 18, y = 48500,
+        label = "What happened on these<br>two <b style='color:#F7B01B;'>summer days</b>?"),
+    stat = "unique", 
+    color = "grey20",
+    family = "Asap SemiCondensed",
+    fill = NA, 
+    label.color = NA
+  ) +
+  scale_color_manual(
+    values = c("#6681FE", "#1EC98D", "#F7B01B", "#A26E7C")
+  )
+
+```
+
+## Facet labelling
+
+`label_both`: 
+```{r}
+g +
+  facet_wrap(
+    ~ day_night,
+    labeller = label_both
+  )
+```
+
+.. add a second dimension: 
+```{r}
+g +
+  facet_wrap(
+    ~ is_workday + day_night,
+    labeller = label_both
+  )
+
+```
+
+
+```{r}
+g +
+  facet_wrap(
+    ~ is_workday + day_night,
+    labeller = labeller(
+      day_night = str_to_title
+    )
+  )
+
+```
+
+add a mapping to the facet labelling:
+
+```{r}
+codes <- c(
+  `TRUE` = "Workday",
+  `FALSE` = "Weekend or Holiday"
+)
+
+g +
+  facet_wrap(
+    ~ is_workday + day_night,
+    labeller = labeller(
+      day_night = str_to_title,
+      is_workday = codes
+    )
+  )
+
+g +
+  facet_wrap(
+    ~ is_workday + day_night,
+    labeller = labeller(
+      .default = str_to_title,
+      is_workday = codes
+    )
+  )
+
+```
+
+
+```{r}
+g +
+  facet_grid(
+    day_night ~ is_workday,
+    labeller = labeller(
+      day_night = str_to_title,
+      is_workday = codes
+    )
+  ) +
+  theme(
+    legend.position = "top"
+  )
+```
+
+
+## Annotations
+
+highlighting outliers:
+
+```{r}
+ga <- 
+  ggplot(bikes, 
+         aes(x = temp, y = count)) +
+  geom_point(
+    aes(color = count > 40000),
+    size = 2
+  ) +
+  scale_color_manual(
+    values = c("grey", "firebrick"),
+    guide = "none"
+  )
+
+ga
+
+```
+
+
+adding text `annotate`
+```{r}
+ga +
+  annotate(
+    geom = "text",
+    x = 18,
+    y = 48000,
+    label = "What happened here?"
+  )
+
+ga +
+  annotate(
+    geom = "text",
+    x = 18,
+    y = 48000,
+    label = "What happened here?",
+    color = "firebrick",
+    size = 6,
+    family = "Asap SemiCondensed",
+    fontface = "bold",
+    lineheight =  .8
+  )
+```
+
+We can also try to modify the textual elements by relying on an interactive dashboard that is part of the `ggannotate` package. I commented the respective call to `gganimate` to make sure that the `html` file still renders to a document.
+
+```{r}
+#ggannotate::ggannotate(g)
+```
+
+
+add a `rect`:
+```{r}
+ga + 
+  annotate(
+    geom = "text",
+    x = 19.5,
+    y = 42000,
+    label = "What happened here?",
+    family = "Asap SemiCondensed",
+    size = 6,
+    vjust = 1.3
+  ) +
+  annotate(
+    geom = "rect",
+    xmin = 17, 
+    xmax = 22,
+    ymin = 42000, 
+    ymax = 54000,
+    color = "firebrick", 
+    fill = NA
+  )
+
+```
+
+`segment`: 
+```{r}
+ga +
+  annotate(
+    geom = "text",
+    x = 10,
+    y = 38000,
+    label = "The\nhighest\ncount",
+    family = "Asap SemiCondensed",
+    size = 6,
+    lineheight =  .8
+  ) +
+  annotate(
+    geom = "segment",
+    x = 13, 
+    xend = 18.2,
+    y = 38000, 
+    yend = 51870
+  )
+
+```
+
+`curve` and `arrow`: 
+```{r}
+ga +
+  annotate(
+    geom = "text",
+    x = 10,
+    y = 38000,
+    label = "The\nhighest\ncount",
+    family = "Asap SemiCondensed",
+    size = 6,
+    lineheight =  .8
+  ) +
+  annotate(
+    geom = "curve",
+    x = 13, 
+    xend = 18.2,
+    y = 38000, 
+    yend = 51870
+  )
+
+ga +
+  annotate(
+    geom = "text",
+    x = 10,
+    y = 38000,
+    label = "The\nhighest\ncount",
+    family = "Asap SemiCondensed",
+    size = 6,
+    lineheight =  .8
+  ) +
+  annotate(
+    geom = "curve",
+    x = 13, 
+    xend = 18.2,
+    y = 38000, 
+    yend = 51870,
+    curvature = .25,
+    arrow = arrow()
+  )
+
+
+ga +
+  annotate(
+    geom = "text",
+    x = 10,
+    y = 38000,
+    label = "The\nhighest\ncount",
+    family = "Asap SemiCondensed",
+    size = 6,
+    lineheight =  .8
+  ) +
+  annotate(
+    geom = "curve",
+    x = 13, 
+    xend = 18.2,
+    y = 38000, 
+    yend = 51870,
+    curvature = .25,
+    arrow = arrow(
+      length = unit(10, "pt"),
+      type = "closed",
+      ends = "both"
+    )
+  )
+```
+
+```{r}
+gh <- 
+  ggplot(
+    data = filter(bikes, temp >= 27),
+    aes(x = date, y = temp)
+  ) +
+  geom_point(
+    data = bikes,
+    color = "grey65", alpha = .3
+  ) +
+  geom_point(size = 2.5)
+
+gh
+```
+
+```{r}
+gh +
+  geom_text(
+    aes(label = format(date, "%m/%d")),
+    nudge_x = 10,
+    hjust = 0
+  )
+
+gh +
+  geom_label(
+    aes(label = format(date, "%m/%d")),
+    nudge_x = .3,
+    hjust = 0
+  )
+
+
+gh +
+  geom_text(
+    aes(label = format(date, "%m/%d")),
+    nudge_x = 10,
+    hjust = 0
+  )
+
+gh +
+  geom_label(
+    aes(label = format(date, "%m/%d")),
+    nudge_x = .3,
+    hjust = 0
+  )
+
+
+```
+
+
+```{r}
+
+
+set.seed(20230918)
+
+gh +
+  ggrepel::geom_text_repel(
+    aes(label = format(date, "%m/%d"))
+  )
+
+
+
+set.seed(20230918)
+
+gh + 
+  ggrepel::geom_text_repel(
+    aes(label = format(date, "%m/%d")),
+    family = "Spline Sans Mono",
+    size = 4.5,
+    fontface = "bold"
+  )
+
+
+
+gh +
+  ggrepel::geom_text_repel(
+    aes(label = format(date, "%m/%d")),
+    family = "Spline Sans Mono",
+    # space between points + labels
+    box.padding = .8,
+    # always draw segments
+    min.segment.length = 0
+  )
+
+
+
+gh +
+  ggrepel::geom_text_repel(
+    aes(label = format(date, "%y/%m/%d")),
+    family = "Spline Sans Mono",
+    # force to the right
+    xlim = c(NA, as.Date("2015-06-01")), 
+    hjust = 1
+  )
+
+
+
+gh +
+  ggrepel::geom_text_repel(
+    aes(label = format(date, "%y/%m/%d")),
+    family = "Spline Sans Mono",
+    xlim = c(NA, as.Date("2015-06-01")),
+    # style segment
+    segment.curvature = .01,
+    arrow = arrow(length = unit(.02, "npc"), type = "closed")
+  )
+
+
+
+gh +
+  ggrepel::geom_text_repel(
+    aes(label = format(date, "%y/%m/%d")),
+    family = "Spline Sans Mono",
+    xlim = c(NA, as.Date("2015-06-01")),
+    # style segment
+    segment.curvature = .001,
+    segment.inflect = TRUE
+  )
+
+
+
+g +
+  ggforce::geom_mark_rect(
+    aes(label = "Outliers?",
+        filter = count > 40000)
+  )
+
+
+
+g +
+  ggforce::geom_mark_rect(
+    aes(label = "Outliers?",
+        filter = count > 40000),
+    color = "black",
+    label.family = "Asap SemiCondensed"
+  )
+
+
+
+g +
+  ggforce::geom_mark_rect(
+    aes(label = "Outliers?",
+        filter = count > 40000),
+    description = "What happened on\nthese two days?",
+    color = "black",
+    label.family = "Asap SemiCondensed"
+  )
+
+
+
+g +
+  ggforce::geom_mark_rect(
+    aes(label = "Outliers?",
+        filter = count > 40000),
+    description = "What happened on\nthese two days?",
+    color = "black",
+    label.family = "Asap SemiCondensed",
+    expand = unit(8, "pt"),
+    radius = unit(12, "pt"),
+    con.cap = unit(0, "pt"),
+    label.buffer = unit(15, "pt"),
+    con.type = "straight",
+    label.fill = "transparent"
+  )
+
+
+
+g +
+  ggforce::geom_mark_circle(
+    aes(label = "Outliers?",
+        filter = count > 40000),
+    description = "What happened on\nthese two days?",
+    color = "black",
+    label.family = "Asap SemiCondensed",
+    expand = unit(8, "pt"),
+    con.cap = unit(0, "pt"),
+    label.buffer = unit(15, "pt"),
+    con.type = "straight",
+    label.fill = "transparent"
+  )
+
+
+
+g +
+  ggforce::geom_mark_hull(
+    aes(label = "Outliers?",
+        filter = count > 40000),
+    description = "What happened on\nthese two days?",
+    color = "black",
+    label.family = "Asap SemiCondensed",
+    expand = unit(8, "pt"),
+    con.cap = unit(0, "pt"),
+    label.buffer = unit(15, "pt"),
+    con.type = "straight",
+    label.fill = "transparent"
+  )
+
+
+
+bikes |>
+  filter(year == "2016") |>
+  group_by(month, day_night) |> 
+  summarize(count = sum(count)) |> 
+  ggplot(aes(x = month, y = count, 
+             color = day_night,
+             group = day_night)) +
+  geom_line(linewidth = 1) +
+  coord_cartesian(expand = FALSE) +
+  scale_y_continuous(
+    labels = scales::label_comma(
+      scale = 1/10^3, suffix = "K"
+    ),
+    limits = c(0, 850000)
+  ) +
+  scale_color_manual(
+    values = c("#FFA200", "#757BC7"),
+    name = NULL
+  )
+
+
+
+bikes |>
+  filter(year == "2016") |>
+  group_by(month, day_night) |> 
+  summarize(count = sum(count)) |> 
+  ggplot(aes(x = month, y = count, 
+             color = day_night,
+             group = day_night)) +
+  geomtextpath::geom_textline(
+    aes(label = day_night),
+    linewidth = 1,
+    vjust = -.5, 
+    family = "Asap SemiCondensed",
+    fontface = "bold"
+  ) +
+  coord_cartesian(expand = FALSE) +
+  scale_y_continuous(
+    labels = scales::label_comma(
+      scale = 1/10^3, suffix = "K"
+    ),
+    limits = c(0, 850000)
+  ) +
+  scale_color_manual(
+    values = c("#FFA200", "#757BC7"),
+    guide = "none"
+  )
+
+
+
+bikes |>
+  filter(year == "2016") |>
+  group_by(month, day_night) |> 
+  summarize(count = sum(count)) |> 
+  mutate(day_night = if_else(
+    day_night == "day", 
+    "Day period (6am-6pm)", 
+    "Night period (6pm-6am)"
+  )) |> 
+  ggplot(aes(x = month, y = count, 
+             color = day_night,
+             group = day_night)) +
+  geomtextpath::geom_textline(
+    aes(label = day_night),
+    linewidth = 1,
+    vjust = -.5, 
+    hjust = .01,
+    family = "Asap SemiCondensed",
+    fontface = "bold"
+  ) +
+  coord_cartesian(expand = FALSE) +
+  scale_y_continuous(
+    labels = scales::label_comma(
+      scale = 1/10^3, suffix = "K"
+    ),
+    limits = c(0, 850000)
+  ) +
+  scale_color_manual(
+    values = c("#FFA200", "#757BC7"),
+    guide = "none"
+  )
+
+
+
+bikes |>
+  filter(year == "2016") |>
+  ggplot(aes(x = month, y = count, 
+             color = day_night,
+             group = day_night)) +
+  stat_summary(
+    geom = "line", fun = sum,
+    linewidth = 1
+  ) +
+  geomtextpath::geom_textline(
+    aes(label = day_night), 
+    stat = "summary" # fails
+  ) +
+  coord_cartesian(expand = FALSE) +
+  scale_y_continuous(
+    labels = scales::label_comma(
+      scale = 1/10^3, suffix = "K"
+    ),
+    limits = c(0, 850000)
+  ) +
+  scale_color_manual(
+    values = c("#FFA200", "#757BC7"),
+    name = NULL
+  )
+```
+
+
+## Advanced labels
+
+A new dataset: 
+```{r read-friends-data}
+friends <- read_csv("./data/friends-mentions-partners.csv")
+
+friends
+
+
+```
+
+Create a tibble of colors:
+```{r}
+match_colors <-
+  tibble(
+    key = c("Chandler", "Joey", "Monica", "Monica & Chandler", 
+            "Phoebe", "Rachel", "Rachel & Joey", "Ross", "Ross & Rachel"),
+    color = c("#48508c", "#55331d", "#a64d64", "#774f78", 
+              "#5b7233", "#ba2a22", "#882f20", "#f6ab18", "#d86b1d")
+  )
+
+match_colors
+
+
+
+```
+ Left-join the colors: 
+
+```{r}
+friends |> 
+  mutate(key = if_else(
+    !partners %in% c("Ross & Rachel", "Rachel & Joey", "Monica & Chandler"),
+    word(partners, 1), partners
+  )) |> 
+  left_join(
+    match_colors
+  )
+
+```
+
+```{r}
+
+friends_render <- friends |> 
+  mutate(key = if_else(
+    !partners %in% c("Ross & Rachel", "Rachel & Joey", "Monica & Chandler"),
+    word(partners, 1), partners
+  )) |> 
+  left_join(
+    match_colors
+  ) |> 
+  mutate(
+    partners = if_else(
+      key %in% c("Ross & Rachel", "Rachel & Joey", "Monica & Chandler"),
+      paste0("<b style='color:", color, "'>", partners, "</b>"),
+      str_replace(partners, key, paste0("<b style='color:", color, "'>", key, "</b>"))
+    )
+  )
+
+friends_render |> select(key, color, partners) |> unique()
+
+
+```
+
+
+```{r}
+ggplot(friends_render,
+       aes(x = id, y = partners)) + 
+  theme(axis.text.y = ggtext::element_markdown(hjust = 0))
+
+ggplot(friends_render,
+  aes(x = id, y = partners)) + 
+  geom_point(aes(size = mentions, color = color), alpha = .3) +
+  scale_color_identity() +
+  scale_size_area(max_size = 5, guide = "none") +
+  coord_cartesian(expand = FALSE, clip = "off") +
+  labs(x = "Episodes", y = NULL) +
+  theme_minimal(base_family = "Asap SemiCondensed") +
+  theme(
+    axis.text.y = ggtext::element_markdown(hjust = 0),
+    axis.text.x = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+```
+
