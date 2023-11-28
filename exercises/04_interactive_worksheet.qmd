@@ -1,0 +1,211 @@
+---
+title: "Interactive Visualisations"
+subtitle: "Worksheet based on a graduate coures on 'Electoral Behaviour' by Julia Schulte-Cloos"
+output:
+  bookdown::html_document2:
+    theme: flatly
+    highlight: textmate
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+    number_sections: yes
+    code_folding: hide
+    toc_depth: 2 
+bibliography: "../literature.bib"
+link-citations: true
+editor: source
+---
+
+```{r}
+pacman::p_load(tidyverse, 
+               ggiraph, 
+               gganimate, 
+               dygraphs, 
+               leaflet)
+
+# set global chunk options
+knitr::opts_chunk$set(
+  fig.width = 8,
+  fig.height = 4.8,
+  fig.align = "center",
+  out.width = "90%",
+  collapse = TRUE)
+
+```
+
+## Interactive `ggplot` graphs with `ggiraph`
+
+We start by generating an animated `ggplot2` that shows the exact value when hovering over a given point. The data is official election data, showing the average vote share of the German AfD during the 2019 EP elections by the federal states.
+
+```{r ggiraph}
+
+afdshare <- read_csv("./data/afdshare_by_states_ep19.csv")
+
+afd_plot <- afdshare %>%
+  ggplot(aes(y = state, x = mean_afd, color = state)) +
+  geom_point(size = 2) +
+  theme_bw() +
+  geom_pointrange(aes(
+    color = state,
+    xmin = mean_afd - (sd_afd),
+    xmax = mean_afd + (sd_afd)
+  )) +
+  theme(
+    panel.background = element_blank(),
+    panel.grid.major = element_blank()
+  ) +
+  scale_colour_viridis_d() +
+  labs(
+    y = "State",
+    x = "Avg. AfD Share (EP 2019)"
+  ) +
+  theme(legend.position = "none") +
+  geom_point_interactive(aes(tooltip = paste0(
+    "<b>AfD Share: </b>",
+    round(mean_afd, digits = 2)
+  )),
+  size = 1
+  ) +
+  theme(axis.text.y = element_text(margin = margin(t = 20, r = 20, b = 20, l = 20)))
+
+
+
+tooltip_css <- "background-color:#f8f9f9;padding:10px;border-style:solid;border-width:2px;border-color:#125687;border-radius:5px;font-family: var(--font-base, 'Signika', 'DIN', 'Helvetica', sans-serif);"
+
+ggiraph(
+  code = print(afd_plot),
+  hover_css = "cursor:pointer;stroke:blue;fill-opacity:0.3",
+  tooltip_extra_css = tooltip_css,
+  tooltip_opacity = 0.9,
+  height_svg = 4,
+  width_svg = 6
+)
+
+
+```
+
+
+## GIF-animations with `gganimate`
+
+We load the data, which is a pre-processed dataset of more than 200.000 respondents who participated in the ESS survey between 2008 and 2018. The data contains information about the respondents' vote choice in the respective last national election and about their occupation, which was coded based on the Oesch class scheme. We only load the pre-processed data containing the average share of radical right supporters in each respective social class by ESS year.
+
+```{r load-data}
+
+ess_aggregated <- read_csv("./data/ess_radical_right_class_scheme.csv")
+
+```
+
+We then create a default `ggplot`, while adding the `gganimate` layer at the very end on top of this default `ggplot`.
+
+```{r gganimate}
+
+# create a named vector with the different classes and their colours that we want to use
+animation_color_scale <- ess_aggregated %>%
+  mutate(
+    animation_color_scale =
+      case_when(
+        class_scheme == "Socio-Cultural Professionals" |
+          class_scheme == "Production Workers" ~ "#0a1c70",
+        TRUE ~ "#18a009"
+      )
+  ) %>%
+  ungroup() %>%
+  select(class_scheme, animation_color_scale) %>%
+  dplyr::distinct() %>%
+  pull(animation_color_scale, class_scheme)
+
+
+
+
+animation_rrp <- ggplot(
+  data = ess_aggregated,
+  aes(
+    y = class_scheme,
+    x = rrp_vote,
+    colour = class_scheme,
+  )
+) +
+  geom_pointrange(aes(x = mean, xmin = conf_low, xmax = conf_high)) +
+  scale_color_manual(
+    values = animation_color_scale,
+    guide = "none"
+  ) +
+  expand_limits(y = c(0, 0.20)) +
+  scale_x_continuous("Average Share",
+    breaks = c(seq(0, 0.20, 0.05))
+  ) +
+  labs(y = "") +
+  # gganimate code
+  transition_states(
+    essyear,
+    transition_length = 1,
+    state_length = 0.5
+  ) +
+  enter_fade() +
+  exit_shrink() +
+  ease_aes("sine-in-out") +
+  # gganimate specific title
+  labs(title = "Radical right voters\nESS Year: {closest_state}") +
+  theme(plot.margin = margin(1, 1, 3, 2, "cm"))
+
+# show the animation
+# animation_rrp
+
+#save the animation
+#anim_save(animation = animation_rrp, filename = "./figures/rrp_class_animation.gif",
+#          height = 864, width = 1024)
+```
+
+
+![](./figures/rrp_class_animation.gif){fig-align="center" width="100%"}
+
+## Timelines with `dygraphs`
+
+We load a subset of a survey containing adolescents' attitudes towards the EU and their exact birthdates, which we show in a interactive `dygraph`. The [`dygraph` library](http://dygraphs.com/) is an open-source JavaScript charting library.
+
+```{r load-birthdates-data}
+
+birthdates_data <- read_csv2("./data/birthdates.csv")
+
+dygraph(birthdates_data,
+        main = "No of adolescents reaching voting age") %>%
+  dyEvent("2004-06-15", "EP elections", labelLoc = "top") %>%
+  dyOptions(fillGraph = TRUE, fillAlpha = 0.4)
+
+```
+
+We can also specify a range by relying on a pre-defined window:
+
+```{r dygrpah-range}
+
+dygraph(birthdates_data,
+        main = "No of adolescents reaching voting age") %>%
+  dyRangeSelector(dateWindow = c("1999-09-15", "2006-03-15")) %>%
+  dyEvent("2004-06-15", "EP elections", labelLoc = "top") %>%
+  dyOptions(fillGraph = TRUE, fillAlpha = 0.4)
+```
+
+
+
+## Interactive spatial visualisations with `leaflet`
+
+The R package `leaflet` provides R bindings for the javascript mapping library leaflet.js.
+
+```{r leaflet}
+
+leaflet(height=500,
+        width=850) %>% 
+  addTiles() %>% 
+  addMarkers(lat=47.4107931,
+             lng=8.5402012,
+             popup="UZH - IPZ") %>%
+  setView(lat=47.4107931,
+          lng=8.5402012, zoom=15)
+
+```
+
+
+
+
+
