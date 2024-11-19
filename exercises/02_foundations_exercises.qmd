@@ -30,6 +30,7 @@ pacman::p_load(tidyverse,
                )
 ```
 
+
 # Telling Stories with Data by Rohan Alexander
 
 This worksheet is largely based on the chapter ["Static Communication"](https://tellingstorieswithdata.com/05-static_communication.html) by the excellent book "Telling Stories with Data. With Applications in R" written by Rohan Alexander (2023).
@@ -155,10 +156,11 @@ theme_minimal <-
   geom_bar(position = "dodge") +
   theme_minimal()
 
+# to assemble plots like this, we need the great "patchwork" package
 (theme_bw + theme_classic) / (theme_dark + theme_minimal)
 ```
 
-In @fig-bepthemes we use `patchwork` to bring together multiple graphs. To do this, after installing and loading the package, we assign the graph to a variable. We then use "+" to signal which should be next to each other, "/" to signal which should be on top, and use brackets to indicate precedence
+In @fig-bepthemes we use `patchwork` to bring together multiple graphs. To do this, after installing and loading the package, we use "+" to signal which graph should be next to each other, "/" to signal which should be on top, and use brackets to indicate precedence.
 
 #### Facets
 
@@ -185,7 +187,7 @@ beps |>
   theme(legend.position = "bottom")
 ```
 
-We could change `facet_wrap()` to wrap vertically instead of horizontally with `dir = "v"`. Alternatively, we could specify a few rows, say `nrow = 2`, or a number of columns, say `ncol = 2`. 
+We could change `facet_wrap()` to wrap vertically instead of horizontally with `dir = "v"`. Alternatively, we could specify a few rows, say `nrow = 2`, or a number of columns, say `ncol = 2`.^[We may also rely on the `facet_col` and `facet_row` functions from the `ggforce` package to create facet layouts.]
 
 By default, both facets will have the same x-axis and y-axis. We could enable both facets to have different scales with `scales = "free"`, or just the x-axis with `scales = "free_x"`, or just the y-axis with `scales = "free_y"` (@fig-facetsfancy). 
 
@@ -447,7 +449,7 @@ world_bank_data |>
 
 The points of a scatterplot sometimes overlap. We can address this situation in a variety of ways (@fig-alphajitter): 
 
-1) Adding a degree of transparency to our dots with "alpha" (@fig-alphajitter-1).\index{graphs!alpha} The value for "alpha" can vary between 0, which is fully transparent, and 1, which is completely opaque. 
+1) Adding a degree of transparency to our dots with "alpha" (@fig-alphajitter-1). The value for "alpha" can vary between 0, which is fully transparent, and 1, which is completely opaque. 
 2) Adding a small amount of noise, which slightly moves the points, using `geom_jitter()` (@fig-alphajitter-2). By default, the movement is uniform in both directions, but we can specify which direction movement occurs with "width" or "height". The decision between these two options turns on the degree to which accuracy matters, and the number of points: it is often useful to use `geom_jitter()` when you want to highlight the relative density of points and not necessarily the exact value of individual points. When using `geom_jitter()` it is a good idea to set a seed for reproducibility.
 
 ```{r}
