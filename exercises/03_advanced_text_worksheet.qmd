@@ -18,12 +18,9 @@ pacman::p_load(tidyverse,
                ggtext, 
                ggrepel, 
                ggforce, 
-               ggannotate, 
-               concaveman)
+               concaveman, 
+               geomtextpath)
 
-if (!"geomtextpath" %in% rownames(installed.packages())) {
-  remotes::install_github("AllanCameron/geomtextpath")
-}
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -34,6 +31,10 @@ knitr::opts_chunk$set(
 set.seed(1234)
 
 options("digits" = 2, "width" = 150)
+
+# specify cairo as a png device
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")))
+
 
 ```
 
@@ -56,8 +57,8 @@ bikes <-
     season == 3 ~ "Winter"
   ))
 
-
-theme_set(theme_light(base_size = 14, base_family = "Asap SemiCondensed"))
+# specify a custom font for your theme (make sure to load it with the extrafont package)
+theme_set(theme_light(base_size = 14, base_family = "Linux Biolinum"))
 
 theme_update(
   panel.grid.minor = element_blank(),
@@ -129,7 +130,6 @@ g + theme(
   plot.title.position = "plot",
   axis.text = element_text(
     color = "#28a87d",
-    family = "Spline Sans Mono",
     face = "italic",
     lineheight = 1.3, # no effect here
     angle = 45,
@@ -148,7 +148,6 @@ g + theme(
   plot.title.position = "plot",
   axis.text = element_text(
     color = "#28a87d",
-    family = "Spline Sans Mono",
     face = "italic",
     lineheight = 1.3, # no effect here
     angle = 45,
@@ -170,7 +169,6 @@ g + theme(
   plot.title.position = "plot",
   axis.text = element_text(
     color = "#28a87d",
-    family = "Spline Sans Mono",
     face = "italic",
     lineheight = 1.3, # no effect here
     angle = 45,
@@ -184,6 +182,7 @@ g + theme(
 )
 
 ```
+
 Turn on "debugging" mode to fix the margins.
 
 ```{r}
@@ -193,7 +192,6 @@ g + theme(
   plot.title.position = "plot",
   axis.text = element_text(
     color = "#28a87d",
-    family = "Spline Sans Mono",
     face = "italic",
     hjust = 1,
     vjust = 0,
@@ -222,6 +220,7 @@ g <- g + labs(tag = NULL, title = NULL,
 
 g
 ```
+
 Add customised breaks to the y scale.
 
 ```{r}
@@ -232,7 +231,7 @@ g +
 
 ```
 
-"Pretty" breakes:
+"Pretty" breaks:
 
 ```{r}
 g +
@@ -242,6 +241,7 @@ g +
 ```
 
 Change the comma format of the scales: 
+
 ```{r}
 g +
   scale_y_continuous(
@@ -252,6 +252,7 @@ g +
 ```
 
 Add a suffix to the scale for clarity.
+
 ```{r}
 g +
   scale_y_continuous(
@@ -262,7 +263,9 @@ g +
     name = NULL
   )
 ```
+
 Name of the scale can be changed easily: 
+
 ```{r}
 g +
   scale_y_continuous(
@@ -275,6 +278,7 @@ g +
 ```
 
 Add a functional call to label the scale. 
+
 ```{r}
 g +
   scale_y_continuous(
@@ -309,6 +313,7 @@ g +
 ## Styling with `ggtext`
 
 Markdown cannot be parsed out-of-the-box.
+
 ```{r}
 g +
   ggtitle("**TfL bike sharing trends by _season_**")
@@ -328,6 +333,7 @@ g +
 ```
 
 HTML styling for more customisation: 
+
 ```{r}
 g +
   ggtitle("<b style='font-family:Times;font-size:25pt'>TfL</b> bike sharing trends by <i style='color:#28A87D;'>season</i>") +
@@ -337,7 +343,8 @@ g +
 
 ```
 
-Add some `geom_richtext` to the plot: s
+Add some `geom_richtext` to the plot: 
+
 ```{r}
 g +
   ggtext::geom_richtext(
@@ -350,6 +357,7 @@ g +
   )
 
 ```
+
 Transparency to make sure the points remain visible. 
 
 ```{r}
@@ -359,7 +367,6 @@ g +
         label = "What happened on these<br>two <b style='color:#F7B01B;'>summer days</b>?"),
     stat = "unique", 
     color = "grey20",
-    family = "Asap SemiCondensed",
     fill = NA, 
     label.color = NA
   ) +
@@ -468,7 +475,8 @@ ga
 ```
 
 
-adding text `annotate`
+adding text with `annotate`
+
 ```{r}
 ga +
   annotate(
@@ -486,20 +494,14 @@ ga +
     label = "What happened here?",
     color = "firebrick",
     size = 6,
-    family = "Asap SemiCondensed",
     fontface = "bold",
     lineheight =  .8
   )
 ```
 
-We can also try to modify the textual elements by relying on an interactive dashboard that is part of the `ggannotate` package. I commented the respective call to `gganimate` to make sure that the `html` file still renders to a document.
-
-```{r}
-#ggannotate::ggannotate(g)
-```
-
 
 add a `rect`:
+
 ```{r}
 ga + 
   annotate(
@@ -507,7 +509,6 @@ ga +
     x = 19.5,
     y = 42000,
     label = "What happened here?",
-    family = "Asap SemiCondensed",
     size = 6,
     vjust = 1.3
   ) +
@@ -524,6 +525,7 @@ ga +
 ```
 
 `segment`: 
+
 ```{r}
 ga +
   annotate(
@@ -531,7 +533,6 @@ ga +
     x = 10,
     y = 38000,
     label = "The\nhighest\ncount",
-    family = "Asap SemiCondensed",
     size = 6,
     lineheight =  .8
   ) +
@@ -546,6 +547,7 @@ ga +
 ```
 
 `curve` and `arrow`: 
+
 ```{r}
 ga +
   annotate(
@@ -553,7 +555,6 @@ ga +
     x = 10,
     y = 38000,
     label = "The\nhighest\ncount",
-    family = "Asap SemiCondensed",
     size = 6,
     lineheight =  .8
   ) +
@@ -571,7 +572,6 @@ ga +
     x = 10,
     y = 38000,
     label = "The\nhighest\ncount",
-    family = "Asap SemiCondensed",
     size = 6,
     lineheight =  .8
   ) +
@@ -592,7 +592,6 @@ ga +
     x = 10,
     y = 38000,
     label = "The\nhighest\ncount",
-    family = "Asap SemiCondensed",
     size = 6,
     lineheight =  .8
   ) +
@@ -663,7 +662,7 @@ gh +
 ```{r}
 
 
-set.seed(20230918)
+set.seed(1234)
 
 gh +
   ggrepel::geom_text_repel(
@@ -672,12 +671,10 @@ gh +
 
 
 
-set.seed(20230918)
 
 gh + 
   ggrepel::geom_text_repel(
     aes(label = format(date, "%m/%d")),
-    family = "Spline Sans Mono",
     size = 4.5,
     fontface = "bold"
   )
@@ -687,7 +684,6 @@ gh +
 gh +
   ggrepel::geom_text_repel(
     aes(label = format(date, "%m/%d")),
-    family = "Spline Sans Mono",
     # space between points + labels
     box.padding = .8,
     # always draw segments
@@ -699,7 +695,6 @@ gh +
 gh +
   ggrepel::geom_text_repel(
     aes(label = format(date, "%y/%m/%d")),
-    family = "Spline Sans Mono",
     # force to the right
     xlim = c(NA, as.Date("2015-06-01")), 
     hjust = 1
@@ -710,7 +705,6 @@ gh +
 gh +
   ggrepel::geom_text_repel(
     aes(label = format(date, "%y/%m/%d")),
-    family = "Spline Sans Mono",
     xlim = c(NA, as.Date("2015-06-01")),
     # style segment
     segment.curvature = .01,
@@ -722,7 +716,6 @@ gh +
 gh +
   ggrepel::geom_text_repel(
     aes(label = format(date, "%y/%m/%d")),
-    family = "Spline Sans Mono",
     xlim = c(NA, as.Date("2015-06-01")),
     # style segment
     segment.curvature = .001,
@@ -743,8 +736,17 @@ g +
   ggforce::geom_mark_rect(
     aes(label = "Outliers?",
         filter = count > 40000),
-    color = "black",
-    label.family = "Asap SemiCondensed"
+    color = "black"
+  )
+
+
+
+g +
+  ggforce::geom_mark_rect(
+    aes(label = "Outliers?",
+        filter = count > 40000),
+    description = "What happened on\nthese two days?",
+    color = "black"
   )
 
 
@@ -755,18 +757,6 @@ g +
         filter = count > 40000),
     description = "What happened on\nthese two days?",
     color = "black",
-    label.family = "Asap SemiCondensed"
-  )
-
-
-
-g +
-  ggforce::geom_mark_rect(
-    aes(label = "Outliers?",
-        filter = count > 40000),
-    description = "What happened on\nthese two days?",
-    color = "black",
-    label.family = "Asap SemiCondensed",
     expand = unit(8, "pt"),
     radius = unit(12, "pt"),
     con.cap = unit(0, "pt"),
@@ -783,7 +773,6 @@ g +
         filter = count > 40000),
     description = "What happened on\nthese two days?",
     color = "black",
-    label.family = "Asap SemiCondensed",
     expand = unit(8, "pt"),
     con.cap = unit(0, "pt"),
     label.buffer = unit(15, "pt"),
@@ -799,7 +788,6 @@ g +
         filter = count > 40000),
     description = "What happened on\nthese two days?",
     color = "black",
-    label.family = "Asap SemiCondensed",
     expand = unit(8, "pt"),
     con.cap = unit(0, "pt"),
     label.buffer = unit(15, "pt"),
@@ -842,7 +830,6 @@ bikes |>
     aes(label = day_night),
     linewidth = 1,
     vjust = -.5, 
-    family = "Asap SemiCondensed",
     fontface = "bold"
   ) +
   coord_cartesian(expand = FALSE) +
@@ -876,7 +863,6 @@ bikes |>
     linewidth = 1,
     vjust = -.5, 
     hjust = .01,
-    family = "Asap SemiCondensed",
     fontface = "bold"
   ) +
   coord_cartesian(expand = FALSE) +
@@ -923,6 +909,7 @@ bikes |>
 ## Advanced labels
 
 A new dataset: 
+
 ```{r read-friends-data}
 friends <- read_csv("./data/friends-mentions-partners.csv")
 
@@ -932,6 +919,7 @@ friends
 ```
 
 Create a tibble of colors:
+
 ```{r}
 match_colors <-
   tibble(
@@ -946,7 +934,8 @@ match_colors
 
 
 ```
- Left-join the colors: 
+
+Left-join the colors: 
 
 ```{r}
 friends |> 
@@ -996,7 +985,7 @@ ggplot(friends_render,
   scale_size_area(max_size = 5, guide = "none") +
   coord_cartesian(expand = FALSE, clip = "off") +
   labs(x = "Episodes", y = NULL) +
-  theme_minimal(base_family = "Asap SemiCondensed") +
+  theme_minimal() +
   theme(
     axis.text.y = ggtext::element_markdown(hjust = 0),
     axis.text.x = element_blank(),

@@ -1,6 +1,6 @@
 ---
 title: "Interactive Visualisations"
-subtitle: "Worksheet based on a graduate coures on 'Electoral Behaviour' by Julia Schulte-Cloos"
+subtitle: "Worksheet based on a graduate course on 'Electoral Behaviour' by Julia Schulte-Cloos"
 output:
   bookdown::html_document2:
     theme: flatly
@@ -17,7 +17,7 @@ link-citations: true
 editor: source
 ---
 
-```{r}
+```{r setup, include=FALSE}
 pacman::p_load(tidyverse, 
                ggiraph, 
                gganimate, 
@@ -31,6 +31,13 @@ knitr::opts_chunk$set(
   fig.align = "center",
   out.width = "90%",
   collapse = TRUE)
+
+# specify cairo as a png device
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")))
+
+# specify a custom font for your theme (make sure to load it with the extrafont package)
+theme_set(theme_light(base_size = 14, base_family = "Linux Biolinum"))
+
 
 ```
 
@@ -57,7 +64,7 @@ afd_plot <- afdshare %>%
   ) +
   scale_colour_viridis_d() +
   labs(
-    y = "State",
+    y = "",
     x = "Avg. AfD Share (EP 2019)"
   ) +
   theme(legend.position = "none") +
@@ -152,9 +159,9 @@ animation_rrp <- ggplot(
 # show the animation
 # animation_rrp
 
-#save the animation
-#anim_save(animation = animation_rrp, filename = "./figures/rrp_class_animation.gif",
-#          height = 864, width = 1024)
+# save the animation
+# anim_save(animation = animation_rrp, filename = "./figures/rrp_class_animation.gif",
+#          height = 400, width = 600)
 ```
 
 
