@@ -1,0 +1,1478 @@
+---
+title: "Data visualisation with R - An applied walkthrough the GLES Post-Election Study 2025"
+format:
+  html:
+    theme: cosmo
+    fontfamily: libertinus
+    highlight-style: textmate
+    smooth-scroll: false
+    number-sections: false
+    code-fold: true
+    code-summary: "Show Code"
+    collapsed: false
+    toc: true
+    toc-float: false
+    standalone: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+  fig.showtext: true  
+---
+
+```{r}
+pacman::p_load(
+  haven,
+  tidyverse,
+  dplyr,
+  knitr, 
+  kableExtra,
+  ggplot2,
+  ggalluvial,
+  ggridges,
+  ggforce,
+  showtext,
+  ggtext,
+  tidyr,
+  purrr,
+  rsample,
+  broom,
+  Hmisc,
+  sysfonts,
+  waffle
+)
+
+# add a custom font
+font_add_google("Gudea", "gudea")
+
+# globally set the font for all plots
+ggplot2::theme_set(
+  ggplot2::theme_minimal(base_family = "gudea")
+)
+
+showtext_auto()
+
+showtext_opts(dpi = 200)
+
+```
+
+## Data Loading
+
+The German Longitudinal Election Study (GLES) provides high-quality data for national and international election research. The GLES Cross-Section was conducted in the weeks following the German federal election in February 2025. With over 7,000 participants, it is particularly suitable for classic electoral research, including international comparative analysis.
+
+We load the data from the GLES 2025 post-election cross-section, which is in STATA format, into our R workspace.
+
+```{r}
+GLES <- read_dta("./data/ZA10100_v2-0-0_GLES_2025_Querschnitt_Nachwahl.dta")
+```
+
+
+The first question we will be trying to answer using is how voters from different German parties differ in their self-placement on the left-right spectrum?
+
+The relevant variables in the codebook are: 
+- `Q37`: the respondent's self-placement on a left-right scale ranging from 1 (left) to 11 (right)
+- `Q114ba` captures the party vote (Zweitstimme).
+
+We create a new dataset containing only the variables of interest.
+
+```{r}
+lr_voters <- GLES %>%
+  select(party = q114ba, lrscale = q37) %>%
+  filter(
+    party %in% c(1, 4, 5, 6, 7, 322, 392),
+    lrscale > 0
+  )
+
+# by filtering q114ba we only choose respondents that voted for one of the biggest 7 german parties
+```
+
+## A First Bar Plot
+
+Before visualizing the left-right placements by party, let's take a look at the general distribution by creating a simple bar plot. We first create a most basic plot.
+
+```{r}
+
+ggplot(
+  data = lr_voters,
+  aes(x = lrscale)
+) + # ggplot can create graphs with only a few lines of code!
+  geom_bar()
+
+# geom_bar is one possible geometry in the ggplot2 framework and is used to create bar charts. Other geoms include:
+
+# geom_point() = scatterplot
+# geom_line() = lines connecting points by increasing value of x
+# geom_path() = lines connecting points in sequence of appearance
+# geom_boxplot(): box and whiskers plot for categorical variables
+# geom_histogram(): histogram for continuous x asis
+# geom_violin(): distribution kernel of data dispersion
+# geom_smooth(): function line based on data
+```
+
+And next, we add some filling to the individual bars and apply some (minimal) theme to have the graph look nicer.
+
+```{r, warning = FALSE, message = FALSE}
+ggplot(
+  data = lr_voters,
+  aes(x = lrscale)
+) +
+  # ggplot offers a lot of different themes that change the look of your graphics. https://ggplot2.tidyverse.org/reference/ggtheme.html gives you an overview of all themes.
+  theme_minimal() +
+  # by dividing the count of every x-value with the total count we get a relative y-axis
+  geom_bar(aes(y = after_stat(count) / sum(after_stat(count)), group = 1),
+    # the "fill" aesthetic determines the inside colour of the geom
+    fill = "darkblue"
+  ) + # you can choose the bar's colour by changing the hex-code
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + # this changes the y-axis from decimal numbers to percentages
+  labs( # labs allows us to create meaningful labels
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  scale_x_continuous(breaks = 1:11) + # this makes sure that the x-axis displays every possible value
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "plot",
+    axis.text.x = element_text(
+      margin = margin(0, 0, 2, 0) # trbl (top, right, bottom, left)
+    ),
+    axis.title.x = element_text(
+      margin = margin(4, 0, 8, 0) # trbl
+    ) # the added margin creates a bit of space between the y-axis and the caption
+  )
+```
+
+The bar plot shows that the majority of German voters consider themselves centrists. There is also a slight bias towards the political left in left-right self-placement.
+
+Let's now colour the plots corresponding to the underlying electorates.
+
+```{r}
+# here we create a new lookup variable that assigns string-values to the party-variable
+lr_voters <- lr_voters %>%
+  mutate(party_name = case_when(
+    party == 1 ~ "CDU/CSU",
+    party == 4 ~ "SPD",
+    party == 5 ~ "FDP",
+    party == 6 ~ "Greens",
+    party == 7 ~ "The Left",
+    party == 322 ~ "AfD",
+    party == 392 ~ "BSW"
+  ))
+
+# we assign a colour to every party
+colours <- c(
+  "CDU/CSU" = "#000000",
+  "SPD" = "#b5040f",
+  "Greens" = "#64A12D",
+  "FDP" = "#d6ad09",
+  "AfD" = "#009EE0",
+  "The Left" = "#cc3d87",
+  "BSW" = "#e68a00"
+)
+```
+
+```{r}
+ggplot(data = lr_voters, aes(x = lrscale, fill = party_name)) +
+  geom_bar(aes(y = (..count..) / sum(..count..)), stat = "count") + # relative to total
+  scale_fill_manual(values = colours) + # this colours the bars in the party's colours
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + # format y-axis as %
+  theme_minimal() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025",
+    fill = "Party"
+  ) +
+  scale_x_continuous(breaks = 1:11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"),
+    axis.text.x = element_text(
+      margin = margin(0, 0, 2, 0) # trbl
+    ),
+    axis.title.x = element_text(
+      margin = margin(4, 0, 8, 0) # trbl
+    ),
+    plot.caption = element_text(
+      hjust = 1.4
+    )
+  )
+
+ggplot(data = lr_voters, aes(x = lrscale, fill = party_name)) +
+  geom_bar(position = "fill") +
+  scale_fill_manual(values = colours) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + # format y-axis as percentage
+  theme_minimal() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025",
+    fill = "" # optional legend title
+  ) +
+  scale_x_continuous(breaks = 1:11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"),
+    axis.text.x = element_text(
+      margin = margin(0, 0, 2, 0) # trbl
+    ),
+    axis.title.x = element_text(
+      margin = margin(4, 0, 8, 0) # trbl
+    ),
+    plot.caption = element_text(
+      hjust = 1.4 # this places the caption in the bottom right corner
+    )
+  )
+```
+
+The first graph shows the same bar plot as before. The only difference is that the bars are coloured according to the percentage of voters for each x value. Meanwhile, the second plot shows the composition of party preference for each x value, but does not tell us anything about the distribution of x across the population.
+
+Both plots are very hard to digest as it's not easily possible to grasp the *differences* between the electorates of different parties. Therefore, we now rely on *facets* to create an individual plot for each party, allowing for a much easier visual comparison of the distributions. Alternatively, we could rely on `position = "dodge"` in `geom_bar` to place the bars for each party next to each other for every x value. However, given the left-right scale ranges from 1-11, and there are seven parties in total, this would lead to a very cluttered graph that is hard to read.
+
+## Faceting
+
+Looking at the graphs using `facets`, we can see that voters of the BSW, Greens, SPD, and The Left lean left, while voters of the AfD, CDU/CSU, and FDP lean right. Interestingly, nearly 50% of far-right AfD voters consider themselves to be in the center of the political spectrum.
+
+```{r}
+# Create a new dataset containing the distribution of left-right self-assessments for each electorate
+lr_voters_prop <- lr_voters %>%
+  group_by(party_name, lrscale) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(party_name) %>%
+  mutate(prop = n / sum(n)) # share for each party
+
+ggplot(data = lr_voters_prop, aes(x = lrscale, y = prop, fill = party_name)) +
+  geom_col() +
+  facet_wrap(~party_name, nrow = 2) + # facet_wrap creates a graph for every value of the given variable
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_x_continuous(breaks = seq(1, 11, by = 2)) +
+  scale_fill_manual(values = colours) +
+  theme_bw() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters by party",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0)),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+## Violin and Box plots
+
+A different way to visualize electorates' left-right self-placements is to use violin or box plots. Using multiple `geom_` objects in ggplot allows us to combine both within one chart.
+
+We start with a simple violin plot.
+
+```{r}
+# only violin plot
+ggplot(data = lr_voters, aes(x = lrscale, y = party_name, fill = party_name)) +
+  geom_violin(alpha = 0.7) + 
+  scale_fill_manual(values = colours) +
+  scale_x_continuous(breaks = 1:11) +
+  theme_minimal() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "panel",
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0)),
+    axis.text.y = element_text(face = "bold"),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+Next, we add some "jitter", i.e., individual data points to the violin plot. To make sure we can still see the distributions, we make the jitter points slightly transparent with `alpha = 0.05`.
+
+```{r}
+# violin plot + jitter
+ggplot(data = lr_voters, aes(x = lrscale, y = party_name, fill = party_name)) +
+  geom_violin(alpha = 0.7) + # the alpha-values define transparency and range from 0-1
+  geom_jitter(aes(colour = party_name), alpha = 0.05, width = 0.5) + # we can add another layer to our plot that displays each data point. The width argument applies some random spread to the points.
+  scale_fill_manual(values = colours) +
+  scale_color_manual(values = colours) +
+  scale_x_continuous(breaks = 1:11) +
+  theme_minimal() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "panel",
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0)),
+    axis.text.y = element_text(face = "bold"),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+
+The jittering with `geom_jitter` adds a random spread to the data points, making it easier to see the density of observations. However, the random spread may lead to certain data points being displayed outside the violin shapes. Rather than relying on `geom_jitter` we can also rely on `geom_sina` from the `ggforce` package, which spreads the points according to the density of observations.  
+
+```{r}
+
+# violin plot + sina
+ggplot(data = lr_voters, aes(x = lrscale, y = party_name, fill = party_name)) +
+  geom_violin(alpha = 0.5) + 
+  # REPLACED geom_jitter with geom_sina
+  geom_sina(aes(colour = party_name), alpha = 0.1, size = 0.5) +
+  scale_fill_manual(values = colours) +
+  scale_color_manual(values = colours) +
+  scale_x_continuous(breaks = 1:11) +
+  theme_minimal() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "panel",
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0)),
+    axis.text.y = element_text(face = "bold"),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+
+
+Instead of a violin plot, we can also rely on a box plot to visualize the distribution and spread of a variable.
+
+```{r}
+# only box-plot
+ggplot(data = lr_voters, aes(x = lrscale, y = party_name, fill = party_name)) +
+  geom_boxplot(alpha = 0.5, outlier.shape = NA) +
+  scale_fill_manual(values = colours) +
+  scale_x_continuous(breaks = 1:11) +
+  theme_minimal() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "panel",
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0)),
+    axis.text.y = element_text(face = "bold"),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+Again, we may also consider adding some jitter to the box plot.
+
+```{r}
+# box-plot + jitter
+ggplot(data = lr_voters, aes(x = lrscale, y = party_name, fill = party_name)) +
+  geom_boxplot(alpha = 0.5, outlier.shape = NA) +
+  geom_jitter(aes(colour = party_name), alpha = 0.1, width = 0.5) +
+  scale_fill_manual(values = colours) +
+  scale_color_manual(values = colours) +
+  scale_x_continuous(breaks = 1:11) +
+  theme_minimal() +
+  labs(
+    x = "Left-Right Self-Placement",
+    y = "",
+    title = "Left-Right Self-Placement of German voters",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "panel",
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0)),
+    axis.text.y = element_text(face = "bold"),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+## Scatter Plots
+
+A scatter plot is a useful way to visualize the relationship between two continuous variables.
+
+The GLES dataset allows us to analyze how different socio-economic groups feel about specific issues. For example, we could study whether poorer people are more likely to support a rent cap. Variable `Q13` contains participants' self-assessments of their economic situations on a scale from 1 to 5 (1 meaning a very good situation and 5 meaning a very poor situation). Variable `Q27I` contains participants' positions on government regulation of rental prices, ranging from 1 (very strong approval) to 5 (very strong disapproval).
+
+To allow for a more intuitive interpretation, we first invert both scales.
+
+```{r}
+GLES <- GLES %>%
+  mutate(
+    individual_economic_situation = ifelse(q13 > 0, 6 - q13, NA),
+    regulation_rental = ifelse(q27i > 0, 6 - q27i, NA)
+  )
+
+# subset the data
+rental_preference_data <- GLES %>%
+  select(
+    lfdn,
+    individual_economic_situation,
+    regulation_rental
+  )
+```
+
+We can calculate Pearson's r to assess whether the two variables are correlated.
+
+```{r}
+correlation_test <- cor.test(
+  rental_preference_data$individual_economic_situation,
+  rental_preference_data$regulation_rental
+)
+
+# show the output of the correlation test in a tidy format
+tidy(correlation_test) %>% 
+  select(estimate, p.value, conf.low, conf.high) %>% 
+  kable(
+    col.names = c("Pearson's r", "p-value", "95% CI Lower", "95% CI Upper"),
+    digits = 3,
+    caption = "Correlation between subjective economic situation and support for rent regulation"
+  ) %>% 
+  kable_styling(full_width = F)
+
+```
+
+The test tells us that there is a significant negative correlation between the two variables. In other words, the better your economic situation, the less likely you are to support regulating rental prices. The following scatter plot shows this correlation.
+
+```{r}
+ggplot(
+  data = rental_preference_data,
+  aes(
+    x = individual_economic_situation,
+    y = regulation_rental
+  )
+) +
+  geom_jitter(alpha = 0.2, width = 1, height = 1) +
+  geom_smooth(method = "lm") + # adding a regression line
+  scale_x_continuous(breaks = 1:5) +
+  xlim(1, 5) +
+  scale_y_continuous(breaks = 1:5) +
+  ylim(1, 5) +
+  theme_minimal() +
+  labs(
+    x = "Subjective economic situation",
+    y = "Support for rent regulation",
+    title = "Correlation between subjective economic situation\nand support for rent regulation",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "panel",
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0)),
+    axis.title.y = element_text(margin = margin(0, 8, 0, 0)),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+The scatter plot confirms the negative correlation. However, due to the large number of data points, the plot is too chaotic. Below, we try another way to display this relationship.
+
+First, we calculate the mean approval rating for each economic group.
+
+```{r}
+rental_by_economic_situation <- rental_preference_data %>%
+  filter(!is.na(individual_economic_situation) &
+    !is.na(regulation_rental)) %>% # filter for missing values
+  group_by(individual_economic_situation) %>% # group by economic self-assessment
+  summarise(
+    mean_rr = mean(regulation_rental), # mean value
+    sd_rr = sd(regulation_rental), # standard deviation
+    n = n(), # count
+    se = sd_rr / sqrt(n), # standard error
+    ci_lower = mean_rr - 1.96 * se, # lower bound of 95%-confidence interval
+    ci_upper = mean_rr + 1.96 * se # upper bound of 95%-confidence interval
+  )
+```
+
+```{r}
+
+ggplot(
+  data = rental_by_economic_situation,
+  aes(
+    x = individual_economic_situation,
+    y = mean_rr
+  )
+) +
+  geom_point(
+    size = 3,
+    color = "#3B82F6"
+  ) +
+  geom_errorbar(
+    aes(ymin = ci_lower, ymax = ci_upper),
+    width = 0.15,
+    linewidth = 0.7
+  ) +
+  geom_line( # connecting all dots
+    linewidth = 0.8,
+    linetype = "solid", # determines the type of line used
+    color = "#3B82F6",
+    alpha = 0.7
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Individual economic situation (1: Low; 5: High)",
+    y = "Support for rent regulation (1: Low; 5: High)",
+    title = "Support for rent regulation from different socioeconomic groups",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "panel",
+    legend.position = "none",
+    axis.text.x = element_text(margin = margin(1, 0, 2, 0), face = "bold"),
+    axis.text.y = element_text(face = "bold"),
+    axis.title.y = element_text(margin = margin(0, 8, 0, 0)),
+    axis.title.x = element_text(margin = margin(4, 0, 2, 0))
+  )
+```
+
+Looking at these graphs, we see that support for rent regulation decreases in higher socioeconomic groups. Nevertheless, every group seems to be rather supportive of state-regulated rents.
+
+Let's next examine the level of support for more issues. `Q27H` measures support for the higher taxation of fossil fuels, while `Q27A` measures the demand for the cultural assimilation of minorities.
+
+```{r}
+# invert scales
+GLES <- GLES %>%
+  mutate(
+    tax_fossil = ifelse(q27h > 0, 6 - q27h, NA),
+    minorities_assimilation = ifelse(q27a > 0, 6 - q27a, NA)
+  )
+
+
+# create new data set
+issues <- GLES %>%
+  select(
+    lfdn,
+    individual_economic_situation,
+    regulation_rental,
+    tax_fossil,
+    minorities_assimilation
+  )
+```
+
+To calculate the mean and 95%-confidence intervals for all three issues by economic group, we first transform the dataset to a "long" dataset.
+
+```{r}
+issues_long <- issues %>%
+  pivot_longer(
+    # Select all the columns you want to pivot
+    cols = c(
+      regulation_rental, tax_fossil,
+      minorities_assimilation
+    ),
+    # The name of the new column that will hold the *names* of the old columns
+    names_to = "issue_name",
+    # The name of the new column that will hold the *values*
+    values_to = "support_level"
+  )
+
+head(issues_long)
+```
+
+Now, we can use `Hmisc` to group by both the economic situation and the new issue_name column, which allows us to calculate mean support levels and confidence intervals for all three issues in one step.
+
+```{r}
+# Filter out NAs first
+issues_long <- issues_long %>%
+  filter(
+    !is.na(individual_economic_situation),
+    !is.na(support_level)
+  )
+
+summary_hmisc <- issues_long %>%
+  group_by(individual_economic_situation, issue_name) %>%
+  summarise(
+    n = n(),
+    # 1. Run smean.cl.normal() which outputs a named vector (Mean, Lower, Upper)
+    # 2. as.list() converts that vector into a named list
+    # 3. as.data.frame() converts that list into a 1-row data frame
+    # 4. summarise() automatically unpacks that data frame into columns
+    as.data.frame(as.list(Hmisc::smean.cl.normal(support_level)))
+  ) %>%
+  ungroup()
+
+head(summary_hmisc)
+```
+
+Notice how simple the ggplot code is because the data is in a long format. We only need one set of `geoms`. For the plot, we will also make the legend labels look professional by replacing the variable names (like regulation_rental) with clean text (like "Rent control").
+
+```{r}
+# Clean up the issue names for the legend
+summary_hmisc <- summary_hmisc %>%
+  mutate(
+    # Create a new 'issue' column based on the 'issue_name' column
+    issue = case_when(
+      issue_name == "regulation_rental" ~ "Rent control",
+      issue_name == "tax_fossil" ~ "Tax fossil fuels",
+      issue_name == "minorities_assimilation" ~ "Cultural assimilation"
+    ),
+    # This is a key step:
+    # Convert 'issue' to a factor to control the *order* they appear in the legend
+    issue = factor(issue, levels = c(
+      "Rent control",
+      "Tax fossil fuels",
+      "Cultural assimilation"
+    ))
+  )
+
+
+ggplot(
+  data = summary_hmisc,
+  # Define the core aesthetics.
+  # 'color' and 'group' are mapped to our new 'issue' column.
+  aes(
+    x = individual_economic_situation,
+    y = Mean, # Use the 'Mean' column from Hmisc
+    color = issue,
+    group = issue
+  )
+) +
+  # Add the layers ONCE
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 3) +
+  geom_errorbar(
+    # Use the 'Lower' and 'Upper' columns from Hmisc
+    aes(ymin = Lower, ymax = Upper),
+    width = 0.15,
+    linewidth = 0.7
+  ) +
+  # use a good categorical color scheme
+  scale_color_brewer(palette = "Set1") +
+  # Use a clean theme
+  theme_minimal() +
+  # Add all titles and labels
+  labs(
+    x = "Individual economic situation",
+    y = "Mean issue support (95% CI)",
+    title = "Support for different issues by socioeconomic groups",
+    caption = "Source: German Longitudinal Election Study 2025"
+  ) +
+  # Fine-tune the theme elements
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+    plot.title.position = "plot",
+    legend.position = "bottom",
+    legend.title = element_blank(), # Hides the "Issue" title
+    legend.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
+    axis.text = element_text(face = "bold"), # Bold x and y axis text
+    axis.title = element_text(face = "bold", size = 12) # Bold x and y axis titles
+  )
+```
+
+## Sankey Chart to Visualize Voter Transitions
+
+Based on the GLES data we can also take a look at changes in voter behavior from the German federal elections in 09/2021 to the German federal elections in 02/2025. `Q33` and `Q111` capture voting participation in the 2021 and 2025 elections, while `Q34BA` and `Q114BA` capture the party that was voted for.
+
+```{r}
+# select the relevant variables and create a new data set
+sankey <- GLES %>%
+  select(
+    vote_25 = q114ba,
+    vote_21 = q34ba,
+    participation_25 = q111,
+    participation_21 = q33
+  ) %>%
+  filter(participation_25 > 0, participation_21 > 0)
+
+# create a new variable that captures voting behaviour for the 2021 election
+sankey <- sankey %>%
+  mutate(vote_21 = case_when(
+    vote_21 == 1 ~ "CDU/CSU",
+    vote_21 == 4 ~ "SPD",
+    vote_21 == 5 ~ "FDP",
+    vote_21 == 6 ~ "Greens",
+    vote_21 == 7 ~ "The Left",
+    vote_21 == 322 ~ "AfD",
+    participation_21 == 2 ~ "Non-voter",
+    vote_21 == 801 ~ "Others"
+  ))
+
+# create a new variable that captures voting behaviour for the 2025 election
+sankey <- sankey %>%
+  mutate(vote_25 = case_when(
+    vote_25 == 1 ~ "CDU/CSU",
+    vote_25 == 4 ~ "SPD",
+    vote_25 == 5 ~ "FDP",
+    vote_25 == 6 ~ "Greens",
+    vote_25 == 7 ~ "The Left",
+    vote_25 == 322 ~ "AfD",
+    vote_25 == 392 ~ "BSW",
+    participation_25 == 2 ~ "Non-voter",
+    vote_25 == 801 ~ "Others"
+  ))
+
+# remove observations with missing values
+sankey <- sankey %>%
+  filter(!is.na(vote_21), !is.na(vote_25))
+
+# assign colours
+party_colours <- c(
+  "CDU/CSU" = "#000000",
+  "SPD" = "#E3000F",
+  "Greens" = "#64A12D",
+  "FDP" = "#FFCC00",
+  "AfD" = "#009EE0",
+  "The Left" = "#D12D82",
+  "BSW" = "#e68a00",
+  "Non-voter" = "#555555",
+  "Others" = "#888888"
+)
+
+# aggregate the data and save it into a new data set
+sankey_agg <- sankey %>%
+  count(vote_21, vote_25)
+
+# define desired party order
+party_order <- c(
+  "CDU/CSU", "SPD", "Greens", "AfD",
+  "The Left", "FDP", "BSW", "Non-voter", "Others"
+)
+
+# apply factor levels to both axes
+sankey_agg$vote_21 <- factor(sankey_agg$vote_21, levels = party_order)
+sankey_agg$vote_25 <- factor(sankey_agg$vote_25, levels = party_order)
+```
+
+Now that the data is prepared, we can plot it. One way to illustrate the data is to create a Sankey diagram. Sankey diagrams can be used to emphasize change in your given data.
+
+```{r, warning = FALSE}
+# first sankey diagram
+ggplot(
+  data = sankey_agg,
+  aes(axis1 = vote_21, axis2 = vote_25, y = n)
+) +
+  # influences the visual appearance of the streams
+  geom_alluvium(aes(fill = vote_25), width = 1 / 9, alpha = 0.85) +
+  # influences the visual appearance of the nodes/boxes
+  geom_stratum(width = 1 / 9, fill = "#F4F5F1", color = "black") +
+  geom_text(
+    stat = "stratum",
+    # this tests if a node makes up for more than 2% of total n
+    # if not, the node gets no text label to avoid clutter
+    aes(label = ifelse(after_stat(count) / sum(after_stat(count)) > 0.02,
+      as.character(after_stat(stratum)), ""
+    )),
+    size = 3
+  ) +
+  scale_x_discrete(limits = c("Vote 2021", "Vote 2025"), expand = c(.1, .1)) +
+  scale_fill_manual(values = party_colours) +
+  theme_void(base_size = 12) + # we want the background to be white
+  labs(
+    title = "Self-reported party vote in 2025 compared to 2021",
+    caption = "Source: German Longitudinal Election Study 2025",
+    x = "",
+    y = ""
+  ) +
+  theme(
+    legend.position = "none",
+    text = element_text(family = "gudea"),
+    plot.background = element_rect(color = "#F4F5F1", fill = "#F4F5F1"),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5, margin = margin(10, 0, 5, 0)),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    plot.caption = element_text(hjust = 0.98, margin = margin(3, 0, 5, 0))
+  ) +
+  annotate("text", x = 1, y = max(sankey_agg$n) * 6.25, label = "2021", size = 4, fontface = "bold") +
+  annotate("text", x = 2, y = max(sankey_agg$n) * 6.25, label = "2025", size = 4, fontface = "bold")
+```
+
+Looking at the Sankey diagram, we can see that the CDU/CSU, the AfD and the Left Party gained voters in 2025. Conversely, the SPD, Greens, and FDP (the governing parties from 2021 to 2024/25) lost voters. Many former SPD and FDP voters chose to vote for the CDU/CSU in 2025. There was also a significant shift of voters from the SPD and Greens to the Left Party. The AfD recruited new voters from the CDU/CSU, the SPD, the FDP, and former non-voters. The newly founded BSW gained most of their voters from the Left Party, as they had previously split from that party.
+
+
+## Ridgeline Plot
+
+We will begin with the visualization of far-right attitudes among German electorates. The variables `Q166A-Q166F` touch on different aspects of far-right ideologies, such as nationalism and anti-Semitism. First, we will create an additive index that calculates the sum across all six variables. This index ranges from 0 (strongly disagreeing with all far-right statements) to 24 (strongly agreeing with all far-right statements).
+
+```{r}
+# invert the scales and remove NAs from all variables
+GLES <- GLES %>%
+  mutate(
+    one_strong_party = ifelse(q166a > 0, 5 - q166a, NA),
+    nationalism = ifelse(q166b > 0, 5 - q166b, NA),
+    too_many_foreigners = ifelse(q166c > 0, 5 - q166c, NA),
+    anti_semitism = ifelse(q166d > 0, 5 - q166d, NA),
+    social_darwinism = ifelse(q166e > 0, 5 - q166e, NA),
+    nazi_crimes = ifelse(q166f > 0, 5 - q166f, NA)
+  )
+
+# match party IDs with party name
+GLES <- GLES %>%
+  mutate(party = case_when(
+    q114ba == 1 ~ "CDU/CSU",
+    q114ba == 4 ~ "SPD",
+    q114ba == 5 ~ "FDP",
+    q114ba == 6 ~ "Greens",
+    q114ba == 7 ~ "The Left",
+    q114ba == 322 ~ "AfD",
+    q114ba == 392 ~ "BSW"
+  ))
+
+# create the additive index
+GLES <- GLES %>%
+  mutate(far_right_attitudes = one_strong_party + nationalism + too_many_foreigners + anti_semitism + social_darwinism + nazi_crimes)
+
+# create new data set with relevant variables
+far_right_attitudes_by_party <- GLES %>%
+  select(
+    lfdn,
+    party,
+    far_right_attitudes
+  ) %>%
+  filter(!is.na(party))
+
+# order parties by mean value on the far-right index
+party_order <- far_right_attitudes_by_party %>%
+  group_by(party) %>%
+  summarise(mean_far_right_attitudes = mean(far_right_attitudes, na.rm = TRUE)) %>%
+  arrange(desc(mean_far_right_attitudes)) %>%
+  pull(party)
+
+# set factor levels in desired order
+far_right_attitudes_by_party <- far_right_attitudes_by_party %>%
+  mutate(party = factor(party, levels = party_order))
+
+# assign colours to the different electorates
+colours <- c(
+  "CDU/CSU" = "gray30",
+  "SPD" = "#b5040f",
+  "Greens" = "#64A12D",
+  "FDP" = "#d6ad09",
+  "AfD" = "#009EE0",
+  "The Left" = "#cc3d87",
+  "BSW" = "#e68a00"
+)
+```
+
+Now that we have prepared the data, we can create the ridgeline plot. We will use `geom_density_ridges` from the `ggridges` package to draw our geoms. This package also comes with `theme_ridges()`, which improves the appearance of the plot.
+
+```{r, warning = FALSE, message = FALSE}
+
+ggplot(data = far_right_attitudes_by_party, aes(x = far_right_attitudes, y = party, fill = party)) +
+  # rel_min_height = X sets a percent cutoff relative to the highest point of any of the density curves, thereby eliminating the long tails
+  geom_density_ridges(rel_min_height = 0.01, quantile_lines = TRUE, quantiles = 2, alpha = 1) +
+  # scale for x-axis
+  scale_x_continuous(breaks = c(0, 4, 8, 12, 16, 20, 24), limits = c(0, 24)) +
+  coord_cartesian(clip = "off") + # makes sure that the ridgeline at the top isn't cut off
+  scale_fill_manual(values = colours) +
+  theme_ridges(center_axis_labels = TRUE) +
+  labs(
+    x = "Far-right ideology",
+    y = "",
+    title = "Far-right political views among German electorates",
+    caption = "Source: German Longitudinal Election Study (2025)"
+  ) +
+  theme(
+    text = element_text(family = "gudea"), # here we set the gudea font as default for this plot
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5, margin = margin(5, 0, 10, 0)),
+    axis.title = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 12),
+    legend.position = "none",
+    plot.caption = element_text(margin = margin(10, 0, 0, 0), size = 8),
+    # we can also change the background colour of our plot. F4F5F1 is a bit warmer than pure white and makes the plot look more professional
+    plot.background = element_rect(color = "#F4F5F1", fill = "#F4F5F1"),
+  )
+```
+
+## Waffle Chart
+
+To show party preferences in Germany by age and region, we will rely on a waffle chart. The inspiration for this plot can be found here: https://r-graph-gallery.com/web-waffle-chart-for-evolution-of-energy-mix.html.
+
+```{r}
+# calculate the age of all respondents by subtracting their year of birth from the year the survey was conducted
+GLES <- GLES %>%
+  mutate(
+    d2a = as.numeric(d2a),
+    age = 2025 - d2a
+  )
+
+# create new data set with relevant variables
+vote_by_age_region <- GLES %>%
+  select(lfdn, party, age, west = ostwest2) %>%
+  filter(!is.na(party), !is.na(age), west > -1)
+
+# categorize the age variable into 4 categories
+vote_by_age_region <- vote_by_age_region %>%
+  mutate(age_category = case_when(
+    age < 36 ~ "18-35",
+    age < 56 ~ "36-55",
+    age < 69 ~ "56-68",
+    age < 90 ~ "69-89"
+  ))
+```
+
+```{r}
+# set a party order for the plot
+party_order <- c("CDU/CSU", "SPD", "FDP", "AfD", "Greens", "The Left", "BSW")
+
+# aggregate and compute exact voting share by region and age category
+vote_by_age_region_aggregated <- vote_by_age_region %>%
+  group_by(west, age_category, party) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(west, age_category) %>%
+  mutate(
+    exact_share = 100 * n / sum(n)
+  )
+
+# this code snippet calculates the amount of tiles each party gets in each region X age waffle. Using the largest remainder method, the code ensures that every waffle has exactly 100 tiles (1 tile corresponding to approximately 1% of votes)
+vote_by_age_region_aggregated <- vote_by_age_region_aggregated %>%
+  group_by(west, age_category) %>%
+  mutate(
+    base = floor(exact_share),
+    fraction = exact_share - base,
+    need = 100 - sum(base),
+    add = ifelse(row_number(desc(fraction)) <= need, 1L, 0L),
+    tiles = base + add
+  ) %>%
+  ungroup() %>%
+  # set party factor and sort rows by party order for stacking
+  mutate(
+    party = factor(party, levels = party_order),
+    region = factor(ifelse(west == 1, "West", "East"), levels = c("West", "East"))
+  ) %>%
+  arrange(region, age_category, party)
+```
+
+
+We also define a specific subtitle for the plot, that explains the major patterns in the data. 
+
+```{r}
+# set colours (almost the same as before but the FDP gets a darker shade of yellow for visibility reasons)
+colours <- c(
+  "CDU/CSU" = "gray30",
+  "SPD" = "#b5040f",
+  "Greens" = "#64A12D",
+  "FDP" = "#c49e08",
+  "AfD" = "#009EE0",
+  "The Left" = "#cc3d87",
+  "BSW" = "#e68a00"
+)
+
+# we also want to add a subtitle-text that interprets the data and replaces the legend by coloring the party names in their respective colors. To do this we have to use html.
+subtitle_text <- glue::glue(
+  "
+The two Volksparteien, the <span style='color:{colours['CDU/CSU']};'><strong>CDU/CSU</strong></span> and the <span style='color:{colours['SPD']};'><strong>SPD</strong></span>, are much more popular among older people and in West Germany. Meanwhile, the <span style='color:{colours['Greens']};'><strong>Greens</strong></span> and the <span style='color:{colours['FDP']};'><strong>FDP</strong></span> are also more successful in West Germany, but seem to be more popular with younger voters. <span style='color:{colours['The Left']};'><strong>The Left</strong></span>, on the other hand, is especially favored by young East German voters. A similar trend applies to the <span style='color:{colours['AfD']};'><strong>AfD</strong></span> and the <span style='color:{colours['BSW']};'><strong>BSW</strong></span>, which are also more popular among East German voters.
+  "
+)
+
+waffle_plot <- ggplot(data = vote_by_age_region_aggregated, aes(fill = party, values = tiles)) +
+  geom_waffle(n_rows = 10, n_cols = 10, color = "white", size = 0.4) +
+  facet_grid(region ~ age_category, switch = "y") + # 2 rows (East/West) × 4 columns (age categories)
+  scale_fill_manual(values = colours) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Party preferences in Germany by age and region",
+    x = NULL,
+    y = NULL,
+    fill = "",
+    caption = "Source: German Longitudinal Election Study (2025)",
+    subtitle = subtitle_text
+  ) +
+  theme(
+    panel.grid = element_blank(),
+    text = element_text(family = "gudea"),
+    plot.background = element_rect(color = "#F4F5F1", fill = "#F4F5F1"),
+    strip.text = element_text(face = "bold", size = 12),
+    plot.title = element_text(face = "bold", hjust = 0, size = 16),
+    axis.text = element_blank(),
+    legend.position = "none",
+    plot.subtitle = element_textbox_simple(
+      hjust = 0,
+      margin = margin(10, 0, 10, 0),
+      color = "grey15"
+    )
+  )
+
+waffle_plot
+```
+
+## Heat Map to Visualize Affective Polarization
+
+In the following we are going to create a "heat map" that visualizes affective polarization between different electorates.
+
+```{r}
+GLES <- GLES %>%
+  mutate(vote = case_when(
+    q114ba == 1 ~ "CDU/CSU",
+    q114ba == 4 ~ "SPD",
+    q114ba == 5 ~ "FDP",
+    q114ba == 6 ~ "Greens",
+    q114ba == 7 ~ "The Left",
+    q114ba == 322 ~ "AfD",
+    q114ba == 392 ~ "BSW"
+  ))
+
+# the 'evaluation_' variables measure the judgments of the 8 largest German parties. Higher values indicate a more positive evaluation.
+
+GLES <- GLES %>%
+  mutate(
+    evaluation_SPD = ifelse(q17d > 0, q17d - 1, NA),
+    evaluation_CDU = ifelse(q17b > 0, q17b - 1, NA),
+    evaluation_CSU = ifelse(q17c > 0, q17c - 1, NA),
+    evaluation_Greens = ifelse(q17f > 0, q17f - 1, NA),
+    evaluation_FDP = ifelse(q17e > 0, q17e - 1, NA),
+    evaluation_AfD = ifelse(q17h > 0, q17h - 1, NA),
+    evaluation_Left = ifelse(q17g > 0, q17g - 1, NA),
+    evaluation_BSW = ifelse(q17m > 0, q17m - 1, NA)
+  )
+
+# Since the questionnaire differentiated between the CDU and the CSU, we have to create a new variable that adds the values from both scales together and divides them by two.
+GLES <- GLES %>%
+  mutate(
+    evaluation_CDUCSU = (evaluation_CDU + evaluation_CSU) / 2
+  )
+
+affective_polarization <- GLES %>%
+  select(vote, evaluation_SPD, evaluation_CDUCSU, evaluation_Greens, evaluation_FDP, evaluation_AfD, evaluation_Left, evaluation_BSW) %>%
+  filter(
+    !is.na(vote)
+  )
+```
+
+We have to `pivot_longer` the data again to get it into a long format that is suitable for ggplot. Then, we can calculate the mean evaluation of each party by those who voted for each party. Finally, we can plot the data using `geom_point`, where the size and color of each point indicates the average evaluation.
+
+```{r}
+
+affective_polarization_plot_data <- affective_polarization %>%
+  select(vote, starts_with("evaluation_")) %>%
+  group_by(vote) %>%
+  pivot_longer(
+    starts_with("evaluation_"),
+    names_to = "eval",
+    values_to = "affect"
+  ) %>%
+  group_by(vote, eval) %>%
+  summarise(
+    mean_party_affect = mean(affect, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  # rename some labels
+  mutate(eval = gsub("evaluation_", "", eval)) %>%
+  mutate(eval = if_else(eval %in% c("CDUCSU"), "CDU/CSU", eval)) %>%
+  mutate(eval = if_else(eval == "Left", "The Left", eval)) %>%
+  mutate(
+    eval = fct_relevel(
+      eval,
+      c("AfD", "BSW", "CDU/CSU", "FDP", "Greens", "SPD", "The Left")
+    ),
+    vote = fct_relevel(
+      vote,
+      c("AfD", "BSW", "CDU/CSU", "FDP", "Greens", "SPD", "The Left")
+    )
+  ) 
+
+
+
+ggplot(data = affective_polarization_plot_data,
+    aes(
+      x = eval,
+      y = vote,
+      size = mean_party_affect,
+      color = mean_party_affect
+    )
+  ) +
+  geom_point(alpha = 0.8) +
+  scale_color_gradient(low = "#008080", high = "#FFA500", guide = "none") +
+  scale_size_continuous(range = c(8, 15), guide = "none") +
+  geom_text(aes(label = round(mean_party_affect, 2)),
+    size = 3, color = "gray10"
+  ) +
+  labs(
+    x = "Average Affect Towards ...",
+    y = "Voted for ...",
+    title = "Affective polarization - German federal election 2025",
+    caption = "Source: German Longitudinal Election Study - ZA10100"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "gudea"),
+    plot.background = element_rect(color = "#F4F5F1", fill = "#F4F5F1"),
+    plot.title = element_text(hjust = 0.5, size = 14, color = "gray10", face = "bold"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(margin = margin(0, 0, 10, 0), size = 12, color = "gray10"),
+    axis.text.y = element_text(margin = margin(0, 20, 0, 0), size = 12, color = "gray10"),
+    axis.title = element_text(size = 14, color = "gray10"),
+    plot.caption = element_text(hjust = 1, size = 10, color = "gray10")
+  )
+
+```
+
+While we can clearly see that voters evaluate the party they voted for most positively, we also see that the AfD is evaluated most negatively by supporters of other parties.
+
+## Bootstrap Plot
+
+Bootstrapping enables us to estimate the distribution of estimators by repeatedly sampling the given data. Now, let's compare the differences in average agreement on various different issues between voters on the far left and voters on the far right of the political spectrum.
+
+-   `issue_gender_neutral_language` = "Gender-neutral language promotes equality"
+-   `issue_reduce_inequality` = "The government should reduce income differences"
+-   `issue_arms_to_ukraine` = "Germany should provide no arms to Ukraine"
+-   `issue_voting_civiv_duty` = "Voting is a civc duty"
+-   `issue_socialism` = "Socialism is a good idea"
+
+We first recode the variables so that higher values indicate higher average agreement.
+
+```{r}
+GLES <- GLES %>%
+  mutate(
+    issue_gender_neutral_language = ifelse(q27b > 0, 5 - q27b, NA),
+    issue_reduce_inequality = ifelse(q27d > 0, 5 - q27d, NA),
+    issue_arms_to_ukraine = ifelse(q27e > 0, 5 - q27e, NA),
+    issue_voting_civiv_duty = ifelse(q50d > 0, q50d - 1, NA),
+    issue_socialism = ifelse(q50e > 0, q50e - 1, NA)
+  )
+
+GLES <- GLES %>%
+  mutate(left_right = case_when(
+    q37 %in% c(1, 2) ~ "Far-left",
+    q37 %in% c(10, 11) ~ "Far-right",
+  ))
+
+left_right_issues <- GLES %>%
+  select(issue_gender_neutral_language, 
+         issue_reduce_inequality, 
+         issue_arms_to_ukraine, 
+         issue_voting_civiv_duty, 
+         issue_socialism, 
+         left_right, 
+         respondent_id = lfdn) %>%
+  drop_na()
+```
+
+```{r}
+# set seed for reproducibility
+set.seed(1111)
+
+# Normalization function
+normalize <- function(x) {
+  return((x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE)))
+}
+
+# Variable mapping for plot labels
+variable_mapping <- tibble::tibble(
+  variable = c(
+    "issue_voting_civiv_duty", "issue_socialism", "issue_gender_neutral_language",
+    "issue_reduce_inequality", "issue_arms_to_ukraine"
+  ),
+  label = c(
+    "Voting as a civic duty",
+    "Socialism",
+    "Gender-neutral language",
+    "Reduce income inequality",
+    "No arms to Ukraine"
+  )
+)
+```
+
+We first define a function that calculates the mean agreement for each issue, separately for far-left and far-right respondents. We then create 1000 bootstrap samples of our data and apply the function to each of these samples. Finally, we summarize the results by calculating the median and 95% confidence intervals of the bootstrapped means.
+
+```{r}
+respondent_bootstraps <- rsample::bootstraps(left_right_issues, times = 1000)
+
+calculate_means <- function(split) {
+  rsample::analysis(split) %>%
+    select(left_right, starts_with("issue_")) %>%
+    pivot_longer(cols = -left_right, names_to = "variable", values_to = "value") %>%
+    group_by(variable) %>%
+    mutate(value_norm = normalize(value)) %>%
+    ungroup() %>%
+    filter(!is.na(value_norm)) %>%
+    group_by(left_right, variable) %>%
+    summarise(boot_mean = mean(value_norm, na.rm = TRUE), .groups = "drop")
+}
+
+respondent_boot_means <- respondent_bootstraps %>%
+  mutate(means_df = map(splits, calculate_means)) %>%
+  select(id, means_df) %>%
+  unnest(means_df)
+
+plot_data_respondent <- respondent_boot_means %>%
+  left_join(variable_mapping, by = "variable") %>%
+  mutate(
+    left_right = factor(left_right, 
+                        levels = c("Far-left", "Far-right"),
+                        labels = c("Far-left", "Far-right")),
+    label = forcats::fct_relevel(
+      label, "Voting as a civic duty",
+      "Socialism",
+      "Gender-neutral language",
+      "Reduce income inequality",
+      "No arms to Ukraine"
+    )
+  )
+
+bootstrap_summary <- plot_data_respondent %>%
+  group_by(label, left_right) %>%
+  summarise(
+    median_boot = quantile(boot_mean, .50, na.rm = TRUE),
+    lower_ci = quantile(boot_mean, .025, na.rm = TRUE),
+    upper_ci = quantile(boot_mean, .975, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+To visualize the bootstrapped means, we will create a half-eye plot using the `ggdist` package. The half-eye plot shows the distribution of the bootstrapped means for each issue and political orientation. Additionally, we will add point ranges to indicate the median and 95% confidence intervals.
+
+```{r}
+bootstrap_plot <- ggplot(
+  data = plot_data_respondent,
+  aes(x = boot_mean, y = forcats::fct_rev(label), fill = left_right, color = left_right)
+) +
+  ggdist::stat_halfeye(
+    adjust = 0.5,
+    .width = 0,
+    justification = -0.08,
+    alpha = 0.8
+  ) +
+  ggdist::stat_dots(
+    data = . %>% group_by(left_right, label) %>% sample_n(1000),
+    side = "bottom",
+    height = 0.4
+  ) +
+  geom_pointrange(
+    data = bootstrap_summary,
+    aes(x = median_boot, xmin = lower_ci, xmax = upper_ci),
+    shape = 21,
+    size = 0.6
+  ) +
+  scale_fill_manual(values = c("#ff2e2e", "#009ee0")) +
+  scale_color_manual(values = c("#cc0000", "#007ab3")) +
+  scale_x_continuous(breaks = c(0, 0.25, 0.50, 0.75, 1), limits = c(0, 1)) +
+  labs(
+    title = "Average agreement with various issues",
+    subtitle = "Comparison between voters on the far-left and the far-right",
+    x = "Agreement (0 = Strongly disagree, 1 = Strongly Agree)",
+    y = NULL,
+    caption = "Source: German Longitudinal Election Study (2025)"
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    text = element_text(family = "gudea"),
+    axis.text.y = element_text(size = 12, hjust = 0, color = "gray10"),
+    axis.title.x = element_text(size = 12, color = "gray10"),
+    plot.title = element_text(hjust = 0.5, size = 16, color = "gray10", face = "bold"),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray10"),
+    plot.background = element_rect(color = "#F4F5F1", fill = "#F4F5F1"),
+    panel.background = element_rect(fill = "#F4F5F1", color = NA),
+    legend.background = element_rect(fill = "#F4F5F1", color = "#F4F5F1"),
+    legend.key = element_rect(fill = "#F4F5F1", color = NA),
+    panel.grid.major.y = element_line(color = "gray90"),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.x = element_line(color = "gray95"),
+    axis.ticks.y = element_blank(),
+    axis.ticks.x = element_line(color = "gray90"),
+    axis.text.x = element_text(color = "gray40"), size = 10,
+    panel.border = element_blank(),
+    plot.caption = element_text(hjust = 1, size = 10)
+  )
+
+bootstrap_plot 
+```
+
+## Bootstrapping Regression Coefficents
+
+In most of our research, we want to show the results of regression estimates rather than raw mean values. Of course, we can also bootstrap regression coefficient estimates. Below, we assess which socio-demographic factors influence far-right attitudes.
+
+We select income, education, gender, age, religiosity, and the degree of urbanization of one's place of residence as predictor variables.
+
+```{r}
+# preparing the variables
+GLES <- GLES %>%
+  mutate(education = if_else(d7 %in% 1:5, d7, NA_real_))
+
+GLES <- GLES %>%
+  mutate(income = if_else(d63 %in% 1:13, d63, NA_real_))
+
+GLES <- GLES %>%
+  mutate(male = case_when(
+    d1 == 1 ~ 1,
+    d1 == 2 ~ 0
+  ))
+
+GLES <- GLES %>%
+  mutate(east_germany = case_when(
+    ostwest2 == 1 ~ 0,
+    ostwest2 == 0 ~ 1
+  ))
+GLES <- GLES %>%
+  mutate(urbanization = if_else(wum6 > 0, 6 - wum6, NA_real_))
+
+GLES <- GLES %>%
+  mutate(religiosity = if_else(d41 %in% 1:4, d41, NA_real_))
+
+# create a new data set
+regression_data <- GLES %>%
+  select(far_right_attitudes, education, income, male, east_germany, urbanization, religiosity) %>%
+  drop_na()
+
+# standardize variables that are not binary to allow for the comparison of effect sizes
+regression_data <- regression_data %>%
+  mutate(across(
+    .cols = c(education, income, urbanization, religiosity),
+    .fns = ~ as.numeric(scale(.x)),
+    .names = "{.col}_z"
+  ))
+```
+
+We run a simple OLS regression with far-right attitudes as the dependent variable and our selected socio-demographic variables (income, education, gender, East vs. West Germany, urbanization, and religiosity) as predictors.
+
+```{r}
+ols <- lm(far_right_attitudes ~ income_z + education_z + male + east_germany + urbanization_z + religiosity_z,
+  data = regression_data
+)
+
+
+# show the regression output in a tidy format
+broom::tidy(ols) %>% 
+  filter(term != "(Intercept)") %>% 
+  select(term, estimate, std.error, p.value) %>% 
+  # display in a kable
+  kableExtra::kable(
+    caption = "OLS Regression Results: Predictors of Far-Right Attitudes",
+    col.names = c("Predictor", "Estimate", "Std. Error", "p-value"),
+    digits = 3,
+    align = "lccc"
+  ) %>%
+  kableExtra::kable_styling(full_width = FALSE)
+
+```
+
+All variables - except religiosity - seem to significantly influence one's level of far-right attitudes. Being male and living in East Germany - ceteris paribus - is associated with a higher level of far-right attitudes. Conversely, an increase in income, education, and degree of urbanization is associated with a reduction in the level of far-right attitudes.
+
+To visualize the uncertainty around the coefficient estimates, we can bootstrap the regression coefficients. We first generate 1000 bootstrap samples of our data. Then, we fit the same linear regression model on each of these samples and store the coefficient estimates.
+
+```{r}
+set.seed(1234)
+
+# generate bootstrap samples
+regression_boot <- bootstraps(regression_data, times = 1000)
+
+# create function that fits a linear regression on every bootstrap sample
+fit_ols_coefs <- function(split) {
+  rsample::analysis(split) %>%
+    lm(far_right_attitudes ~ income_z + education_z + male + east_germany + urbanization_z + religiosity_z,
+      data = .
+    ) %>%
+    broom::tidy()
+}
+
+# apply function to the bootstrapped data and create new data set
+boot_coefs <- regression_boot %>%
+  mutate(coef_df = map(splits, fit_ols_coefs)) %>%
+  select(id, coef_df) %>%
+  unnest(coef_df)
+
+# remove Intercept
+boot_coefs <- boot_coefs %>%
+  filter(term != "(Intercept)")
+
+# rename predictors for nicer labels
+boot_coefs <- boot_coefs %>%
+  mutate(term_label = case_when(
+    term == "income_z" ~ "Income",
+    term == "education_z" ~ "Education",
+    term == "male" ~ "Gender (1 = Male)",
+    term == "east_germany" ~ "East Germany",
+    term == "urbanization_z" ~ "Urbanization",
+    term == "religiosity_z" ~ "Religiosity",
+    TRUE ~ term
+  ))
+
+# apply custom order to boot_coefs
+custom_order <- c("Income", "Education", "Urbanization", "Religiosity", "East Germany", "Gender (1 = Male)")
+boot_coefs <- boot_coefs %>%
+  mutate(term_label = fct_relevel(term_label, !!!custom_order))
+
+# summarize median and 95% CI for each coefficient
+boot_summary <- boot_coefs %>%
+  group_by(term, term_label) %>%
+  summarise(
+    median_estimate = median(estimate, na.rm = TRUE),
+    lower_ci = quantile(estimate, 0.025, na.rm = TRUE),
+    upper_ci = quantile(estimate, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+After having bootstrapped the regression coefficients, we can visualize the results using a half-eye plot again. The half-eye plot shows the distribution of the bootstrapped coefficient estimates for each predictor. Additionally, we will add point ranges to indicate the median and 95% confidence intervals.
+
+```{r}
+regression_bootstrap <- ggplot(
+  data = boot_coefs,
+  aes(
+    x = estimate,
+    y = fct_rev(term_label)
+  )
+) +
+  ggdist::stat_halfeye(
+    adjust = 0.5,
+    .width = 0,
+    justification = -0.05,
+    alpha = 1,
+    fill = "#009ee0"
+  ) +
+  ggdist::stat_dots(
+    data = boot_coefs %>%
+      group_by(term_label) %>%
+      sample_n(1000),
+    side = "bottom",
+    height = 0.4,
+    color = "#007ab3"
+  ) +
+  geom_pointrange(
+    data = boot_summary,
+    aes(x = median_estimate, xmin = lower_ci, xmax = upper_ci),
+    shape = 21,
+    size = 0.6,
+    fill = "#009ee0",
+    color = "#007ab3"
+  ) +
+  # add a vertical gray line to x = 0
+  geom_vline(xintercept = 0, color = "gray70", linetype = "solid", linewidth = 0.7) +
+  labs(
+    title = "Bootstrap Distribution of Regression Coefficients",
+    subtitle = "Predictors of Far-Right Attitudes",
+    x = "Coefficient Estimate",
+    y = NULL,
+    caption = "Source: German Longitudinal Election Study - ZA10100"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    text = element_text(family = "gudea"),
+    axis.text.y = element_text(size = 12, color = "gray10"),
+    axis.text.x = element_text(size = 12, color = "gray10"),
+    axis.title.x = element_text(size = 14, color = "gray10"),
+    plot.title = element_text(hjust = 0.5, size = 16, color = "gray10", face = "bold"),
+    plot.subtitle = element_text(size = 15, hjust = 0.5, color = "gray30"),
+    plot.caption = element_text(hjust = 1, size = 10, color = "gray10"),
+    plot.background = element_rect(color = "#F4F5F1", fill = "#F4F5F1"),
+    panel.background = element_rect(fill = "#F4F5F1", color = NA),
+    panel.grid.major.y = element_line(color = "gray90"),
+    panel.grid.minor = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+regression_bootstrap 
+```

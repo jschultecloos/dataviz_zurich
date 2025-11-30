@@ -1,14 +1,38 @@
 ---
 title: "Annotations and Text"
 subtitle: "Worksheet based on 'Engaging and Beautiful Data Visualizations with ggplot2' by Cedric Scherer"
-format: html
-editor: source
+format:
+  html:
+    theme: cosmo
+    fontfamily: libertinus
+    highlight-style: textmate
+    smooth-scroll: false
+    number-sections: false
+    code-fold: true
+    code-summary: "Show Code"
+    collapsed: false
+    toc: true
+    toc-float: false
+    standalone: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+  fig.showtext: true  
 ---
-
 
 # Engaging and Beautiful Data Visualizations with ggplot2
 
-This worksheet is largely based on the session 2 ["Working with Text"](https://posit-conf-2023.github.io/dataviz-ggplot2/modules/s03-text.html#outline) featured in the excellent workshop 'Engaging and Beautiful Data Visualizations with ggplot2' by Cedric Scherer (2023).
+Text is not just a passive label in data visualization; it is a design element that drives the narrative. This worksheet focuses on how to style, position, and utilize text effectively in `ggplot2`.
+
+This worksheet is largely based on Session 2 ["Working with Text"](https://posit-conf-2023.github.io/dataviz-ggplot2/modules/s03-text.html#outline) featured in the excellent workshop 'Engaging and Beautiful Data Visualizations with ggplot2' by Cedric Scherer (2023).
+
+### Setup and Packages
+
+We will load the core `tidyverse` along with several specialized packages for text handling:
+* **`ggtext`**: For rendering Markdown and HTML styles.
+* **`ggrepel`**: To prevent overlapping labels.
+* **`geomtextpath`**: To place text directly on curved lines.
 
 ```{r setup}
 pacman::p_load(tidyverse, 
@@ -19,27 +43,27 @@ pacman::p_load(tidyverse,
                ggrepel, 
                ggforce, 
                concaveman, 
-               geomtextpath)
+               geomtextpath, 
+               sysfonts, 
+               showtext)
 
-
+# Global chunk options for consistent image sizing
 knitr::opts_chunk$set(
   fig.width = 6,
   fig.height = 3.6,
   fig.align = "center",
   collapse = TRUE)
 
-set.seed(1234)
+set.seed(1234) # Ensures reproducibility (e.g., for jittering or ggrepel)
 
 options("digits" = 2, "width" = 150)
 
-# specify cairo as a png device
+# Use Cairo device for better font rendering in PNGs (smoother text)
 knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")))
-
-
 ```
 
 
-## Load and look at data
+## Load and prepare the data
 
 First we'll load the London bikes data that we are already familiar with. We also set a global theme for the rest of the document.
 
@@ -57,19 +81,33 @@ bikes <-
     season == 3 ~ "Winter"
   ))
 
-# specify a custom font for your theme (make sure to load it with the extrafont package)
-theme_set(theme_light(base_size = 14, base_family = "Linux Biolinum"))
 
+# add a custom font
+font_add_google("Gudea", "gudea")
+
+# globally set the font for all plots
+ggplot2::theme_set(
+  ggplot2::theme_minimal(base_family = "gudea")
+)
+
+showtext_auto()
+
+showtext_opts(dpi = 200)
+
+
+
+# Specific adjustments for all following plots
 theme_update(
   panel.grid.minor = element_blank(),
   plot.title = element_text(face = "bold"),
-  plot.title.position = "plot"
+  # 'plot' aligns the title to the edge of the image, not just the panel
+  plot.title.position = "plot" 
 )
-
 ```
 
 
-A basic plot variant similar to the one we already know from yesterday: 
+This is our starting point: A standard scatter plot showing the relationship between temperature and bike rentals. The text here is functional but uses default formatting.
+
 
 ```{r workhorse-plot}
 
@@ -97,6 +135,8 @@ g
 
 ## Basic text styling
 
+The `theme()` function is where you control the look of non-data elements. We target specific elements (like `plot.title` or `axis.text`) using `element_text()`.
+
 Title in bold: 
 
 ```{r}
@@ -108,7 +148,7 @@ g + theme(
 
 ```
 
-Y-axis text in a green-ish color: 
+Coloring axis text:  
 
 ```{r}
 
@@ -116,13 +156,14 @@ g + theme(
   plot.title = element_text(face = "bold"),
   plot.title.position = "plot",
   axis.text = element_text(
-    color = "#28a87d"
+    color = "#28a87d" # Custom hex color
   )
 )
+
 ```
 
+Often, axis labels need to be rotated to fit. Important: When you rotate text (angle), you often need to adjust the justification (`hjust` and `vjust`) so the text aligns correctly relative to the tick marks. Please keep in mind that rotating axis-labels might not be considered good practice. 
 
-Applying a different font and rotating the text lables (good practice?)
 
 ```{r}
 g + theme(
@@ -211,6 +252,7 @@ g + theme(
 
 ## Scales Styling
 
+Text on the axes (the labels) is controlled via the `scale_` functions. The scales package is essential here for formatting numbers (commas, percentages, currency).
 
 Remove the tag, title, and subtitle. 
 
@@ -226,12 +268,13 @@ Add customised breaks to the y scale.
 ```{r}
 g +
   scale_y_continuous(
-    breaks = 0:4*15000
+    breaks = 0:4*15000 # Manually set break points: 0, 15000, 30000...
   )
 
 ```
 
-"Pretty" breaks:
+"Pretty" breaks: `scales::breaks_pretty()` tries to find "nice" round numbers for breaks automatically.
+
 
 ```{r}
 g +
@@ -264,7 +307,7 @@ g +
   )
 ```
 
-Name of the scale can be changed easily: 
+Sometimes it's cleaner to show "15" instead of "15,000" and indicate the scale in the axis title. To do so, we can easily change the name of the scale: 
 
 ```{r}
 g +
@@ -277,7 +320,7 @@ g +
   )
 ```
 
-Add a functional call to label the scale. 
+We can also write custom functions on-the-fly to format labels exactly how we want.
 
 ```{r}
 g +
@@ -305,14 +348,16 @@ g +
 g +
   scale_color_discrete(
     name = NULL,
-    labels = str_to_title
+    labels = str_to_title # Helper to capitalize first letters
   )
 
 ```
 
 ## Styling with `ggtext`
 
-Markdown cannot be parsed out-of-the-box.
+Standard `ggplot2` does not parse Markdown or HTML (like bolding only one word). The `ggtext` package solves this. 
+
+Without `ggtext`, the asterisks are just printed as text.
 
 ```{r}
 g +
@@ -320,8 +365,7 @@ g +
 
 
 ```
-
-`ggtext::element_markdown`: 
+By setting the theme element to `ggtext::element_markdown`, the text is rendered correctly. 
 
 ```{r}
 g +
@@ -332,7 +376,7 @@ g +
 
 ```
 
-HTML styling for more customisation: 
+You can even use inline CSS to change fonts and colors of specific words within the title. 
 
 ```{r}
 g +
@@ -343,7 +387,7 @@ g +
 
 ```
 
-Add some `geom_richtext` to the plot: 
+Add some `geom_richtext` to the plot (similar to `geom_text`, but allows HTML inside the plot area.)
 
 ```{r}
 g +
@@ -409,7 +453,7 @@ g +
 
 ```
 
-add a mapping to the facet labelling:
+...add a mapping to the facet labelling:
 
 ```{r}
 codes <- c(
@@ -455,7 +499,12 @@ g +
 
 ## Annotations
 
-highlighting outliers:
+### Manual annotations
+
+
+Sometimes you want to highlight specific points without mapping them to a data variable. 
+
+We can first highlight outliers.
 
 ```{r}
 ga <- 
@@ -475,7 +524,7 @@ ga
 ```
 
 
-adding text with `annotate`
+...before we will be adding text with `annotate`.
 
 ```{r}
 ga +
@@ -500,7 +549,7 @@ ga +
 ```
 
 
-add a `rect`:
+...and adding a `rect`:
 
 ```{r}
 ga + 
@@ -524,7 +573,7 @@ ga +
 
 ```
 
-`segment`: 
+We can also rely on shape annotation (`segment`): 
 
 ```{r}
 ga +
@@ -546,7 +595,7 @@ ga +
 
 ```
 
-`curve` and `arrow`: 
+`curve` and `arrow` help to direct the reader's eye with lines and arrows.
 
 ```{r}
 ga +
@@ -582,7 +631,7 @@ ga +
     y = 38000, 
     yend = 51870,
     curvature = .25,
-    arrow = arrow()
+    arrow = arrow() 
   )
 
 
@@ -602,6 +651,7 @@ ga +
     y = 38000, 
     yend = 51870,
     curvature = .25,
+    # Adds an arrow head
     arrow = arrow(
       length = unit(10, "pt"),
       type = "closed",
@@ -609,6 +659,11 @@ ga +
     )
   )
 ```
+
+### Repelling text with `ggrepel`
+
+When labeling points directly, text labels can easily overlap. The `ggrepel` package provides geoms that automatically adjust label positions to minimize overlaps.
+
 
 ```{r}
 gh <- 
@@ -625,6 +680,8 @@ gh <-
 gh
 ```
 
+Without `ggrepel`, labels can overlap and be hard to read.
+
 ```{r}
 gh +
   geom_text(
@@ -658,6 +715,7 @@ gh +
 
 ```
 
+The solution: `ggrepel::geom_text_repel()` and `ggrepel::geom_label_repel()` automatically adjust label positions to minimize overlaps.
 
 ```{r}
 
@@ -722,7 +780,14 @@ gh +
     segment.inflect = TRUE
   )
 
+```
 
+### Annotating groups with `ggforce`
+
+`ggforce` provides several geoms to highlight groups of points with shapes like rectangles, circles, or hulls. These automatically adjust to the data points they enclose.
+
+
+```{r}
 
 g +
   ggforce::geom_mark_rect(
@@ -782,6 +847,14 @@ g +
 
 
 
+
+```
+
+We can also use a `hull` to better fit the points.
+
+```{r}
+
+
 g +
   ggforce::geom_mark_hull(
     aes(label = "Outliers?",
@@ -794,8 +867,13 @@ g +
     con.type = "straight",
     label.fill = "transparent"
   )
+```
 
+### Text on lines with `geomtextpath`
 
+Instead of a legend, we can also place text directly on lines using the `geomtextpath` package.
+
+```{r}
 
 bikes |>
   filter(year == "2016") |>
@@ -818,6 +896,13 @@ bikes |>
   )
 
 
+
+
+```
+
+This replaces `geom_line()` with `geom_textline()`, which places the labels directly on the lines.
+
+```{r}
 
 bikes |>
   filter(year == "2016") |>
@@ -862,6 +947,7 @@ bikes |>
     aes(label = day_night),
     linewidth = 1,
     vjust = -.5, 
+    # move text a bit to the left
     hjust = .01,
     fontface = "bold"
   ) +
@@ -877,38 +963,14 @@ bikes |>
     guide = "none"
   )
 
-
-
-bikes |>
-  filter(year == "2016") |>
-  ggplot(aes(x = month, y = count, 
-             color = day_night,
-             group = day_night)) +
-  stat_summary(
-    geom = "line", fun = sum,
-    linewidth = 1
-  ) +
-  geomtextpath::geom_textline(
-    aes(label = day_night), 
-    stat = "summary" # fails
-  ) +
-  coord_cartesian(expand = FALSE) +
-  scale_y_continuous(
-    labels = scales::label_comma(
-      scale = 1/10^3, suffix = "K"
-    ),
-    limits = c(0, 850000)
-  ) +
-  scale_color_manual(
-    values = c("#FFA200", "#757BC7"),
-    name = NULL
-  )
 ```
 
 
-## Advanced labels
 
-A new dataset: 
+## Advanced: Data-driven labels
+
+A complex example using the `friends` dataset to color-code y-axis labels based on data.
+
 
 ```{r read-friends-data}
 friends <- read_csv("./data/friends-mentions-partners.csv")
@@ -918,7 +980,8 @@ friends
 
 ```
 
-Create a tibble of colors:
+We prepare the data by creating a column containing HTML strings. We replace the character names with colored HTML versions of themselves.
+
 
 ```{r}
 match_colors <-
@@ -949,6 +1012,8 @@ friends |>
 
 ```
 
+We prepare the data by creating a column containing HTML strings. We replace the character names with colored HTML versions of themselves.
+
 ```{r}
 
 friends_render <- friends |> 
@@ -956,10 +1021,9 @@ friends_render <- friends |>
     !partners %in% c("Ross & Rachel", "Rachel & Joey", "Monica & Chandler"),
     word(partners, 1), partners
   )) |> 
-  left_join(
-    match_colors
-  ) |> 
+  left_join(match_colors) |> 
   mutate(
+    # Construct HTML string: <b style='color:RED'>Name</b>
     partners = if_else(
       key %in% c("Ross & Rachel", "Rachel & Joey", "Monica & Chandler"),
       paste0("<b style='color:", color, "'>", partners, "</b>"),
@@ -972,11 +1036,9 @@ friends_render |> select(key, color, partners) |> unique()
 
 ```
 
+Finally, we plot it, using `element_markdown` for the y-axis text to render the HTML colors.
 
 ```{r}
-ggplot(friends_render,
-       aes(x = id, y = partners)) + 
-  theme(axis.text.y = ggtext::element_markdown(hjust = 0))
 
 ggplot(friends_render,
   aes(x = id, y = partners)) + 
@@ -987,6 +1049,7 @@ ggplot(friends_render,
   labs(x = "Episodes", y = NULL) +
   theme_minimal() +
   theme(
+    # Render the HTML axis labels
     axis.text.y = ggtext::element_markdown(hjust = 0),
     axis.text.x = element_blank(),
     panel.grid.major.x = element_blank(),

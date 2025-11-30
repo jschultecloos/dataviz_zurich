@@ -1,10 +1,25 @@
 ---
 title: "Advanced visualizations - Maps"
 subtitle: "Worksheet based on 'Data Visualization by Andrew Heiss'"
-format: html
-editor: source
+format:
+  html:
+    theme: cosmo
+    fontfamily: libertinus
+    highlight-style: textmate
+    smooth-scroll: false
+    number-sections: false
+    code-fold: true
+    code-summary: "Show Code"
+    collapsed: false
+    toc: true
+    toc-float: false
+    standalone: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+  fig.showtext: true  
 ---
-
 
 # Data Vizualisation by Andrew Heiss
 
@@ -89,7 +104,7 @@ Unzip this and put all the contained folders in a foleder called `data`. These s
 
 ## Load and look at data
 
-First we'll load all the different shapefiles we downloaded using `read_sf()`: 
+First we'll load all the different shapefiles that we just downloaded using `read_sf()`: 
 
 ```{r load-shapefiles, include=FALSE}
 

@@ -1,20 +1,25 @@
 ---
 title: "Foundations of GG"
 subtitle: "Worksheet based on 'Telling Stories with Data'"
-output:
-  bookdown::html_document2:
-    theme: flatly
-    highlight: textmate
-    toc: yes
-    toc_float:
-      collapsed: no
-      smooth_scroll: no
-    number_sections: yes
-    code_folding: hide
-    toc_depth: 2 
+format:
+  html:
+    theme: cosmo
+    fontfamily: libertinus
+    highlight-style: textmate
+    smooth-scroll: false
+    number-sections: false
+    code-fold: true
+    code-summary: "Show Code"
+    collapsed: false
+    toc: true
+    toc-float: false
+    standalone: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
 bibliography: "../literature.bib"
 link-citations: true
-editor: source
 ---
 
 

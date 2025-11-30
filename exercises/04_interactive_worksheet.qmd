@@ -1,20 +1,26 @@
 ---
 title: "Interactive Visualisations"
 subtitle: "Worksheet based on a graduate course on 'Electoral Behaviour' by Julia Schulte-Cloos"
-output:
-  bookdown::html_document2:
-    theme: flatly
-    highlight: textmate
-    toc: yes
-    toc_float:
-      collapsed: no
-      smooth_scroll: no
-    number_sections: yes
-    code_folding: hide
-    toc_depth: 2 
+format:
+  html:
+    theme: cosmo
+    fontfamily: libertinus
+    highlight-style: textmate
+    smooth-scroll: false
+    number-sections: false
+    code-fold: true
+    code-summary: "Show Code"
+    collapsed: false
+    toc: true
+    toc-float: false
+    standalone: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+  fig.showtext: true  
 bibliography: "../literature.bib"
 link-citations: true
-editor: source
 ---
 
 ```{r setup, include=FALSE}
@@ -22,7 +28,11 @@ pacman::p_load(tidyverse,
                ggiraph, 
                gganimate, 
                dygraphs, 
-               leaflet)
+               leaflet,
+               showtext,
+               sysfonts,
+               gapminder,
+              plotly)
 
 # set global chunk options
 knitr::opts_chunk$set(
@@ -35,8 +45,13 @@ knitr::opts_chunk$set(
 # specify cairo as a png device
 knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")))
 
-# specify a custom font for your theme (make sure to load it with the extrafont package)
-theme_set(theme_light(base_size = 14, base_family = "Linux Biolinum"))
+# add a font from google
+
+font_add_google("Gudea", "gudea")
+showtext_auto()
+
+
+theme_set(theme_light(base_size = 14, base_family = "gudea"))
 
 
 ```
@@ -52,7 +67,6 @@ afdshare <- read_csv("./data/afdshare_by_states_ep19.csv")
 afd_plot <- afdshare %>%
   ggplot(aes(y = state, x = mean_afd, color = state)) +
   geom_point(size = 2) +
-  theme_bw() +
   geom_pointrange(aes(
     color = state,
     xmin = mean_afd - (sd_afd),
@@ -78,19 +92,61 @@ afd_plot <- afdshare %>%
 
 
 
-tooltip_css <- "background-color:#f8f9f9;padding:10px;border-style:solid;border-width:2px;border-color:#125687;border-radius:5px;font-family: var(--font-base, 'Signika', 'DIN', 'Helvetica', sans-serif);"
+tooltip_css <- "background-color:#f8f9f9;color:#1a1a1a;padding:10px;border-style:solid;border-width:2px;border-color:#125687;border-radius:5px;font-family: 'gudea', 'Signika', 'DIN', 'Helvetica', sans-serif;"
 
-ggiraph(
-  code = print(afd_plot),
-  hover_css = "cursor:pointer;stroke:blue;fill-opacity:0.3",
-  tooltip_extra_css = tooltip_css,
-  tooltip_opacity = 0.9,
-  height_svg = 4,
-  width_svg = 6
+girafe(
+  ggobj = afd_plot,
+  options = list(
+    opts_hover(css = "cursor:pointer;stroke:blue;fill-opacity:0.3"),
+    opts_tooltip(css = tooltip_css, opacity = 0.9)
+  ),
+  width_svg = 6,
+  height_svg = 4
 )
 
 
 ```
+
+
+## Interactive plots with `plotly`
+
+`plot_ly` does not require a `ggplot` object as a starting point, but can be used to create interactive plots from scratch. Here, we use the built-in `USArrests` dataset to create a scatter plot showing the relationship between urban population and assault rates in different US states. 
+
+```{r}
+
+# Prepare the data
+data <- USArrests %>%
+  mutate(State = rownames(USArrests))
+
+# Create the plot
+plot_ly(data, 
+        x = ~UrbanPop, 
+        y = ~Assault,
+        type = 'scatter',
+        mode = 'markers',
+        text = ~paste("State:", State,
+                      "<br>Murder:", Murder,
+                      "<br>Assault:", Assault,
+                      "<br>Rape:", Rape),
+        marker = list(
+          size = ~Rape,
+          color = ~Murder,
+          colorscale = 'Viridis',
+          showscale = TRUE,
+          colorbar = list(title = "Murder Rate"),
+          sizemode = 'diameter',
+          sizeref = 2
+        )
+) %>%
+  layout(
+    title = "US Arrests by State (1973)",
+    xaxis = list(title = "Urban Population (%)"),
+    yaxis = list(title = "Assault Rate"),
+    hovermode = "closest"
+  )
+
+```
+
 
 
 ## GIF-animations with `gganimate`
@@ -157,15 +213,11 @@ animation_rrp <- ggplot(
   theme(plot.margin = margin(1, 1, 3, 2, "cm"))
 
 # show the animation
-# animation_rrp
+animation_rrp
 
-# save the animation
-# anim_save(animation = animation_rrp, filename = "./figures/rrp_class_animation.gif",
-#          height = 400, width = 600)
+
 ```
 
-
-![](./figures/rrp_class_animation.gif){fig-align="center" width="100%"}
 
 ## Timelines with `dygraphs`
 
@@ -193,8 +245,6 @@ dygraph(birthdates_data,
   dyOptions(fillGraph = TRUE, fillAlpha = 0.4)
 ```
 
-
-
 ## Interactive spatial visualisations with `leaflet`
 
 The R package `leaflet` provides R bindings for the javascript mapping library leaflet.js.
@@ -212,7 +262,43 @@ leaflet(height=500,
 
 ```
 
+We can also visualise multiple locations and data points. 
 
+```{r}
 
+# Create country coordinates dataframe
+country_coords <- data.frame(
+  country = c("Afghanistan", "Brazil", "China", "India", "United States", "Nigeria", "Germany", "Japan"),
+  lat = c(33.93911, -14.2350, 35.8617, 20.5937, 37.0902, 9.0820, 51.1657, 36.2048),
+  lon = c(67.70995, -51.9253, 104.1954, 78.9629, -95.7129, 8.6753, 10.4515, 138.2529)
+)
+
+# Filter Gapminder data for 2007 and join coordinates
+gapminder_data <- gapminder %>%
+  filter(year == 2007, country %in% country_coords$country) %>%
+  left_join(country_coords, by = "country")
+
+# Create leaflet map
+leaflet(gapminder_data) %>%
+  addTiles() %>%
+  setView(lng = 0, lat = 20, zoom = 2) %>%
+  addCircleMarkers(
+    lng = ~lon,
+    lat = ~lat,
+    radius = ~sqrt(pop / 1000000),
+    color = "blue",
+    stroke = FALSE,
+    fillOpacity = 0.5,
+    popup = ~paste0("<strong>", country, "</strong><br>Population: ", format(pop, big.mark = ","))
+  ) %>%
+  leaflet::addLegend(
+    position = "bottomright",
+    pal = colorNumeric("Blues", domain = gapminder_data$pop),
+    values = ~pop,
+    title = "Population",
+    labFormat = labelFormat(big.mark = ","),
+    opacity = 1
+  )
+```
 
 
